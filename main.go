@@ -84,8 +84,11 @@ func NewRouter() *mux.Router {
 func main() {
 
 	var addr string
+	var certFilename, keyFilename string
 
 	flag.StringVar(&addr, "addr", ":4000", "Address to listen on.")
+	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
+	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.Parse()
 
 	var logOutput io.Writer = os.Stderr
@@ -95,5 +98,9 @@ func main() {
 
 	router := NewRouter()
 	log.Println("Starting web service.")
-	log.Fatal(http.ListenAndServe(addr, router))
+	if certFilename != "" && keyFilename != "" {
+		log.Fatal(http.ListenAndServeTLS(addr, certFilename, keyFilename, router))
+	} else {
+		log.Fatal(http.ListenAndServe(addr, router))
+	}
 }
