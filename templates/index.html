@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Test your Tor bridge</title>
+  <link rel="stylesheet" href="https://snowflake.torproject.org/index.css" />
+</head>
+
+<body>
+  <header id="header">
+    <a href="https://www.torproject.org/">
+      <img src="https://snowflake.torproject.org/tor-logo@2x.png" alt="Tor" height="50" />
+    </a>
+  </header>
+
+  <section id="content">
+    <form method="POST" action="test">
+      <h1>Test your Tor bridge</h1>
+      <p>Are you wondering if your new Tor bridge works? You have come to the
+      right place! This service lets you test any kind of bridge&mdash;be it
+      vanilla, scramblesuit, obfs2, obfs3, or obfs4.</p>
+
+      <p>Enter your bridge&rsquo;s bridge line, then click &ldquo;Test&rdquo;.
+      This service will then try to bootstrap a Tor connection over your
+      bridge, and tell you if it succeeded.</p>
+
+      <p>Examples of valid bridge lines are:
+      <ul>
+        <li><tt style="font-size: 0.8rem">1.2.3.4:443</tt></li>
+        <li><tt style="font-size: 0.8rem">1.2.3.4:8080 1234567890ABCDEF1234567890ABCDEF12345678</tt></li>
+        <li><tt style="font-size: 0.8rem">obfs4 1.2.3.4:4321 cert=aY09OloaS1d3eUVfc/9ZAJfgV73wiSx6kuY5bxhwtq4MYkUpt26wg3hLGY0dhPvQuA/xAQ iat-mode=0</tt></li>
+      </ul>
+
+      <input type="text" required name="bridge_line" size="50" placeholder="obfs4 1.2.3.4:4321 cert=aY09OloaS1d3eUVfc/9ZAJfgV73wiSx6kuY5bxhwtq4MYkUpt26wg3hLGY0dhPvQuA/xAQ iat-mode=0">
+      <label></label>
+      <button type="submit">Test</button>
+    </form>
+  </section>
+</body>
+
+</html>
