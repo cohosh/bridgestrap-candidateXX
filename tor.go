@@ -40,11 +40,13 @@ func torEncounteredError(line string) bool {
 // given bridgeLine and dataDir) to the given file handle.
 func writeConfigToTorrc(tmpFh io.Writer, dataDir, bridgeLine string) error {
 
-	// FIXME: Optimise our configuration file.
 	_, err := fmt.Fprintf(tmpFh, "UseBridges 1\n"+
 		"SocksPort auto\n"+
+		"SafeLogging 0\n"+
+		"__DisablePredictedCircuits\n"+
 		"DataDirectory %s\n"+
 		"ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n"+
+		"PathsNeededToBuildCircuits 0.25\n"+
 		"Bridge %s", dataDir, bridgeLine)
 
 	return err
@@ -105,6 +107,7 @@ func bootstrapTorOverBridge(bridgeLine string) error {
 				close(c)
 				return
 			}
+			log.Printf("tor says: %q", line)
 
 			if torEncounteredError(string(line)) {
 				if err := cmd.Process.Kill(); err != nil {

@@ -43,8 +43,11 @@ func TestWriteConfigToTorrc(t *testing.T) {
 	fileBuf := new(bytes.Buffer)
 	torrc := `UseBridges 1
 SocksPort auto
+SafeLogging 0
+__DisablePredictedCircuits
 DataDirectory /foo
 ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy
+PathsNeededToBuildCircuits 0.25
 Bridge 1.2.3.4:1234`
 
 	err := writeConfigToTorrc(fileBuf, dataDir, bridgeLine)
