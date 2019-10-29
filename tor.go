@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -37,9 +38,7 @@ func torEncounteredError(line string) bool {
 
 // writeConfigToTorrc writes the content of a Tor config file (including the
 // given bridgeLine and dataDir) to the given file handle.
-func writeConfigToTorrc(tmpFh *os.File, dataDir, bridgeLine string) error {
-
-	log.Printf("Writing torrc to: %s", tmpFh.Name())
+func writeConfigToTorrc(tmpFh io.Writer, dataDir, bridgeLine string) error {
 
 	// FIXME: Optimise our configuration file.
 	_, err := fmt.Fprintf(tmpFh, "UseBridges 1\n"+
@@ -106,7 +105,6 @@ func bootstrapTorOverBridge(bridgeLine string) error {
 				close(c)
 				return
 			}
-			log.Printf("tor says: %s", string(line))
 
 			if torEncounteredError(string(line)) {
 				if err := cmd.Process.Kill(); err != nil {

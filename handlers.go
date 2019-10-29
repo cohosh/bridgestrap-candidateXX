@@ -66,7 +66,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 func createJsonResult(err error, start time.Time) string {
 
-	log.Printf("Creating JSON response %q.", err)
+	log.Printf("Creating JSON response for '%v'.", err)
 
 	end := time.Now()
 	result := &TestResult{
