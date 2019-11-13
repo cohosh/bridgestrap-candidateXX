@@ -73,7 +73,9 @@ func bootstrapTorOverBridge(bridgeLine string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	writeConfigToTorrc(tmpFh, tmpDir, bridgeLine)
+	if err = writeConfigToTorrc(tmpFh, tmpDir, bridgeLine); err != nil {
+		return err
+	}
 
 	// Terminate our process after one minute.
 	ctx, cancel := context.WithTimeout(context.Background(), TorBootstrapTimeout)
