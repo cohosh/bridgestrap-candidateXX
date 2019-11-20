@@ -2,39 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
+	"time"
 )
-
-func TestTorHasBootstrapped(t *testing.T) {
-
-	r := torHasBootstrapped(`Oct 29 10:08:31.000 [notice] Bootstrapped 100%: Done`)
-	if !r {
-		t.Errorf("torHasBootstrapped failed to realise that Tor has bootstrapped.")
-	}
-
-	r = torHasBootstrapped(`Oct 29 10:08:30.000 [notice] Bootstrapped 90%: Establishing a Tor circuit`)
-	if r {
-		t.Errorf("torHasBootstrapped failed to realise that Tor has not bootstrapped.")
-	}
-}
-
-func TestTorEncounteredError(t *testing.T) {
-
-	r := torEncounteredError(`Oct 29 10:15:33.000 [warn] Proxy Client: unable to connect to 3.135.154.16:41609 ("general SOCKS server failure")`)
-	if !r {
-		t.Errorf("torEncounteredError failed to recognise bootstrapping error.")
-	}
-
-	r = torEncounteredError(`Oct 29 10:08:31.000 [notice] Bootstrapped 100%: Done`)
-	if r {
-		t.Errorf("torEncounteredError incorrectly detected a bootstrapping error.")
-	}
-
-	r = torEncounteredError(`Oct 29 10:17:49.000 [warn] Problem bootstrapping. Stuck at 5%: Connecting to directory server. (Can't connect to bridge; PT_MISSING; count 4; recommendation warn; host 0000000000000000000000000000000000000000 at 1.2.3.4:1234)`)
-	if !r {
-		t.Errorf("torEncounteredError failed to recognise bootstrapping error.")
-	}
-}
 
 func TestWriteConfigToTorrc(t *testing.T) {
 
@@ -42,6 +13,7 @@ func TestWriteConfigToTorrc(t *testing.T) {
 	dataDir := "/foo"
 	fileBuf := new(bytes.Buffer)
 	torrc := `UseBridges 1
+ControlPort unix:/foo/control-socket
 SocksPort auto
 SafeLogging 0
 __DisablePredictedCircuits
@@ -80,5 +52,90 @@ func TestBootstrapTorOverBridge(t *testing.T) {
 	err = bootstrapTorOverBridge(brokenBridge)
 	if err == nil {
 		t.Errorf("Failed to label default bridge as broken.")
+	}
+}
+
+func TestCacheFunctions(t *testing.T) {
+
+	cache := make(TestCache)
+	bridgeLine := "obfs4 127.0.0.1:1 cert=foo iat-mode=0"
+
+	e := cache.IsCached(bridgeLine)
+	if e != nil {
+		t.Errorf("Cache is empty but marks bridge line as existing.")
+	}
+
+	cache.AddEntry(bridgeLine, nil)
+	e = cache.IsCached(bridgeLine)
+	if e == nil {
+		t.Errorf("Could not retrieve existing element from cache.")
+	}
+
+	testError := fmt.Errorf("bridge is on fire")
+	cache.AddEntry(bridgeLine, testError)
+	e = cache.IsCached(bridgeLine)
+	if e.Error != testError {
+		t.Errorf("Got test result %q but expected %q.", e.Error, testError)
+	}
+}
+
+func TestCacheExpiration(t *testing.T) {
+
+	cache := make(TestCache)
+
+	const shortForm = "2006-Jan-02"
+	expiry, _ := time.Parse(shortForm, "2000-Jan-01")
+	bridgeLine1 := "1.1.1.1:1111"
+	addrPort, _ := BridgeLineToAddrPort(bridgeLine1)
+	cache[addrPort] = &CacheEntry{nil, expiry}
+
+	bridgeLine2 := "2.2.2.2:2222"
+	addrPort, _ = BridgeLineToAddrPort(bridgeLine2)
+	cache[addrPort] = &CacheEntry{nil, time.Now()}
+
+	e := cache.IsCached(bridgeLine1)
+	if e != nil {
+		t.Errorf("Expired cache entry was not successfully pruned.")
+	}
+
+	e = cache.IsCached(bridgeLine2)
+	if e == nil {
+		t.Errorf("Valid cache entry was incorrectly pruned.")
+	}
+}
+
+func TestBridgeLineToAddrPort(t *testing.T) {
+
+	_, err := BridgeLineToAddrPort("foo")
+	if err == nil {
+		t.Errorf("Failed to return error for invalid bridge line.")
+	}
+
+	_, err = BridgeLineToAddrPort("obfs4 1.1.1.1 FINGERPRINT")
+	if err == nil {
+		t.Errorf("Failed to return error for invalid bridge line.")
+	}
+
+	addrPort, err := BridgeLineToAddrPort("1.1.1.1:1")
+	if err != nil {
+		t.Errorf("Failed to accept valid bridge line.")
+	}
+	if addrPort != "1.1.1.1:1" {
+		t.Errorf("Returned invalid addr:port tuple.")
+	}
+
+	_, err = BridgeLineToAddrPort("255.255.255.255:12345")
+	if err != nil {
+		t.Errorf("Failed to accept valid bridge line.")
+	}
+
+	_, err = BridgeLineToAddrPort("255.255.255.255:12345 FINGERPRINT")
+	if err != nil {
+		t.Errorf("Failed to accept valid bridge line.")
+	}
+
+	_, err = BridgeLineToAddrPort("obfs4 255.255.255.255:12345 FINGERPRINT")
+	if err != nil {
+		t.Errorf("Failed to accept valid bridge line.")
 	}
 }
