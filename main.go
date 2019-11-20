@@ -75,7 +75,7 @@ func main() {
 	var web bool
 	var certFilename, keyFilename string
 
-	flag.StringVar(&addr, "addr", ":4000", "Address to listen on.")
+	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")

@@ -16,7 +16,7 @@ Then, run the binary:
 
       bridgestrap
 
-By default, bridgestrap will listen on port 4000.  To use its Web interface,
+By default, bridgestrap will listen on port 5000.  To use its Web interface,
 point your browser to the address and port that bridgestrap is listening on.
 Use the argument `-addr` to listen to a custom address and port.
 
@@ -36,7 +36,7 @@ prefix) that tor accepts.  Here are a few examples:
 
 You can test bridgestrap's API as follows:
 
-      curl -X POST localhost:4000/api/test -d '{"bridge_line": "1.2.3.4:1234"}'
+      curl -X POST localhost:5000/api/test -d '{"bridge_line": "1.2.3.4:1234"}'
 
 Output
 ------
