@@ -88,13 +88,6 @@ func createJsonResult(err error, start time.Time) string {
 func APITestBridge(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
-	// Rate-limit requests to prevent someone from abusing this service as a
-	// port scanner.
-	if limiter.Allow() == false {
-		SendJSONResponse(w, createJsonResult(fmt.Errorf("Rate limit exceeded."), start))
-		return
-	}
-
 	var req TestRequest
 	var err error
 
