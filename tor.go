@@ -79,8 +79,6 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error) {
 	if err != nil {
 		return
 	}
-
-	log.Printf("Caching %q: %q", addrPort, result)
 	(*tc)[addrPort] = &CacheEntry{result, time.Now()}
 }
 
@@ -203,7 +201,6 @@ func bootstrapTorOverBridgeWrapped(bridgeLine string) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Controller: %s", ev.RawLines)
 		for _, line := range ev.RawLines {
 			if success.MatchString(line) {
 				return nil
