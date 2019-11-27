@@ -199,7 +199,7 @@ func bootstrapTorOverBridgeWrapped(bridgeLine string) error {
 	for {
 		ev, err := torCtrl.NextEvent()
 		if err != nil {
-			return err
+			return fmt.Errorf("timed out waiting for Tor to bootstrap")
 		}
 		for _, line := range ev.RawLines {
 			if success.MatchString(line) {
