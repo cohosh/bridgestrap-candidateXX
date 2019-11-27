@@ -56,6 +56,7 @@ func SendHtmlResponse(w http.ResponseWriter, response string) {
 func SendJSONResponse(w http.ResponseWriter, response string) {
 
 	w.Header().Set("Content-Type", "application/json")
+	log.Printf("Test result: %s", response)
 	SendResponse(w, response)
 }
 
@@ -65,8 +66,6 @@ func Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func createJsonResult(err error, start time.Time) string {
-
-	log.Printf("Creating JSON response for '%v'.", err)
 
 	end := time.Now()
 	result := &TestResult{
