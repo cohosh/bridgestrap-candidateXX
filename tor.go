@@ -172,7 +172,7 @@ func bootstrapTorOverBridgeWrapped(bridgeLine string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), TorBootstrapTimeout)
 	defer cancel()
 
-	log.Printf("Using bridge line %q.", bridgeLine)
+	log.Printf("Testing bridge line %q.", bridgeLine)
 	// Start tor but don't wait for the process to complete, so our call
 	// returns right away.
 	cmd := exec.CommandContext(ctx, "tor", "-f", tmpFh.Name())
