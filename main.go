@@ -105,7 +105,7 @@ func main() {
 	}
 
 	router := NewRouter()
-	log.Println("Starting service.")
+	log.Printf("Starting service on port %s.", addr)
 	if certFilename != "" && keyFilename != "" {
 		log.Fatal(http.ListenAndServeTLS(addr, certFilename, keyFilename, router))
 	} else {
