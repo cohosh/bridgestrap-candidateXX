@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,17 +19,22 @@ const (
 	// Sixty seconds is a reasonable timeout according to:
 	// <https://bugs.torproject.org/32126#comment:1>
 	TorBootstrapTimeout = 60 * time.Second
-	CacheValidity       = 24 * time.Hour
+	// Cache test results for one week.
+	CacheValidity = 7 * 24 * time.Hour
 )
 
 // CacheEntry represents an entry in our cache of bridges that we recently
 // tested.  Error is nil if a bridge works, and otherwise holds an error
 // string.  Time determines when we tested the bridge.
 type CacheEntry struct {
-	Error error
+	// We're using a string instead of an error here because golang's gob
+	// package doesn't know how to deal with an error:
+	// <https://github.com/golang/go/issues/23340>
+	Error string
 	Time  time.Time
 }
 
+// TestCache maps a bridge's addr:port tuple to a cache entry.
 type TestCache map[string]*CacheEntry
 
 var cache TestCache = make(TestCache)
@@ -50,6 +56,45 @@ func BridgeLineToAddrPort(bridgeLine string) (string, error) {
 	} else {
 		return result, nil
 	}
+}
+
+// WriteToDisk writes our test result cache to disk, allowing it to persist
+// across program restarts.
+func (tc *TestCache) WriteToDisk(cacheFile string) error {
+
+	fh, err := os.Create(cacheFile)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	enc := gob.NewEncoder(fh)
+	err = enc.Encode(*tc)
+	if err == nil {
+		log.Printf("Wrote cache with %d elements to %q.",
+			len(*tc), cacheFile)
+	}
+
+	return err
+}
+
+// ReadFromDisk reads our test result cache from disk.
+func (tc *TestCache) ReadFromDisk(cacheFile string) error {
+
+	fh, err := os.Open(cacheFile)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	dec := gob.NewDecoder(fh)
+	err = dec.Decode(tc)
+	if err == nil {
+		log.Printf("Read cache with %d elements from %q.",
+			len(*tc), cacheFile)
+	}
+
+	return err
 }
 
 // IsCached returns a cache entry if the given bridge line has been tested
@@ -79,7 +124,14 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error) {
 	if err != nil {
 		return
 	}
-	(*tc)[addrPort] = &CacheEntry{result, time.Now()}
+
+	var errorStr string
+	if result == nil {
+		errorStr = ""
+	} else {
+		errorStr = result.Error()
+	}
+	(*tc)[addrPort] = &CacheEntry{errorStr, time.Now()}
 }
 
 // getDomainSocketPath takes as input the path to our data directory and
@@ -134,7 +186,7 @@ func makeControlConnection(domainSocket string) (*bulb.Conn, error) {
 // bootstrapTorOverBridgeWrapped.
 func bootstrapTorOverBridge(bridgeLine string) error {
 	if cacheEntry := cache.IsCached(bridgeLine); cacheEntry != nil {
-		return cacheEntry.Error
+		return fmt.Errorf(cacheEntry.Error)
 	}
 
 	err := bootstrapTorOverBridgeWrapped(bridgeLine)

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 )
@@ -74,7 +76,7 @@ func TestCacheFunctions(t *testing.T) {
 	testError := fmt.Errorf("bridge is on fire")
 	cache.AddEntry(bridgeLine, testError)
 	e = cache.IsCached(bridgeLine)
-	if e.Error != testError {
+	if e.Error != testError.Error() {
 		t.Errorf("Got test result %q but expected %q.", e.Error, testError)
 	}
 }
@@ -87,11 +89,11 @@ func TestCacheExpiration(t *testing.T) {
 	expiry, _ := time.Parse(shortForm, "2000-Jan-01")
 	bridgeLine1 := "1.1.1.1:1111"
 	addrPort, _ := BridgeLineToAddrPort(bridgeLine1)
-	cache[addrPort] = &CacheEntry{nil, expiry}
+	cache[addrPort] = &CacheEntry{"", expiry}
 
 	bridgeLine2 := "2.2.2.2:2222"
 	addrPort, _ = BridgeLineToAddrPort(bridgeLine2)
-	cache[addrPort] = &CacheEntry{nil, time.Now()}
+	cache[addrPort] = &CacheEntry{"", time.Now()}
 
 	e := cache.IsCached(bridgeLine1)
 	if e != nil {
@@ -101,6 +103,41 @@ func TestCacheExpiration(t *testing.T) {
 	e = cache.IsCached(bridgeLine2)
 	if e == nil {
 		t.Errorf("Valid cache entry was incorrectly pruned.")
+	}
+}
+
+func TestCacheSerialisation(t *testing.T) {
+
+	cache := make(TestCache)
+	testError := fmt.Errorf("foo")
+	cache.AddEntry("1.1.1.1:1", testError)
+	cache.AddEntry("2.2.2.2:2", fmt.Errorf("bar"))
+
+	tmpFh, err := ioutil.TempFile(os.TempDir(), "cache-file-")
+	if err != nil {
+		t.Errorf("Could not create temporary file for test: %s", err)
+	}
+	defer os.Remove(tmpFh.Name())
+
+	err = cache.WriteToDisk(tmpFh.Name())
+	if err != nil {
+		t.Errorf("Failed to write cache to disk: %s", err)
+	}
+	err = cache.ReadFromDisk(tmpFh.Name())
+	if err != nil {
+		t.Errorf("Failed to read cache from disk: %s", err)
+	}
+
+	if len(cache) != 2 {
+		t.Errorf("Cache supposed to contain but two elements but has %d.", len(cache))
+	}
+
+	e1 := cache.IsCached("1.1.1.1:1")
+	if e1 == nil {
+		t.Errorf("Cache element supposed to exist but doesn't.")
+	}
+	if e1.Error != testError.Error() {
+		t.Errorf("Error string expected to be %q but is %q.", testError, e1.Error)
 	}
 }
 
