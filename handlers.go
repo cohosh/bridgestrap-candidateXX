@@ -7,12 +7,13 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"path"
 	"time"
 )
 
-var IndexPage string = LoadHtmlTemplate("templates/index.html")
-var SuccessPage string = LoadHtmlTemplate("templates/success.html")
-var FailurePage string = LoadHtmlTemplate("templates/failure.html")
+var IndexPage string
+var SuccessPage string
+var FailurePage string
 
 // TestResult represents an incoming JSON request.
 type TestRequest struct {
@@ -30,6 +31,14 @@ type TestResult struct {
 // limiter implements a rate limiter.  We allow 1 request per second on average
 // with bursts of up to 5 requests per second.
 var limiter = rate.NewLimiter(1, 5)
+
+// LoadHtmlTemplates loads all HTML templates from the given directory.
+func LoadHtmlTemplates(dir string) {
+
+	IndexPage = LoadHtmlTemplate(path.Join(dir, "index.html"))
+	SuccessPage = LoadHtmlTemplate(path.Join(dir, "success.html"))
+	FailurePage = LoadHtmlTemplate(path.Join(dir, "failure.html"))
+}
 
 // LoadHtmlTemplate reads the content of the given filename and returns it as
 // string.  If the function is unable to read the file, it logs a fatal error.

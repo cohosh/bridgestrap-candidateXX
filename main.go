@@ -77,18 +77,22 @@ func main() {
 	var web bool
 	var certFilename, keyFilename string
 	var cacheFile string
+	var templatesDir string
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
+	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.Parse()
 
 	var logOutput io.Writer = os.Stderr
 	// Send the log output through our scrubber first.
 	log.SetOutput(&safelog.LogScrubber{Output: logOutput})
 	log.SetFlags(log.LstdFlags | log.LUTC)
+
+	LoadHtmlTemplates(templatesDir)
 
 	if web {
 		log.Println("Enabling web interface.")
