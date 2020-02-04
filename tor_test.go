@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -139,6 +140,41 @@ func TestCacheSerialisation(t *testing.T) {
 	if e1.Error != testError.Error() {
 		t.Errorf("Error string expected to be %q but is %q.", testError, e1.Error)
 	}
+}
+
+func TestCacheConcurrency(t *testing.T) {
+
+	cache := make(TestCache)
+	max := 10000
+	doneReading := make(chan bool)
+	doneWriting := make(chan bool)
+
+	// Trigger many concurrent reads and writes, to verify that there are no
+	// synchronisation issues.
+	go func() {
+		for i := 0; i < max; i++ {
+			ipAddr := net.IPv4(byte((i>>24)&0xff),
+				byte((i>>16)&0xff),
+				byte((i>>8)&0xff),
+				byte(i&0xff))
+			cache.AddEntry(fmt.Sprintf("%s:1234", ipAddr.String()), nil)
+		}
+		doneWriting <- true
+	}()
+
+	go func() {
+		for i := 0; i < max; i++ {
+			ipAddr := net.IPv4(byte((i>>24)&0xff),
+				byte((i>>16)&0xff),
+				byte((i>>8)&0xff),
+				byte(i&0xff))
+			cache.IsCached(fmt.Sprintf("%s:1234", ipAddr.String()))
+		}
+		doneReading <- true
+	}()
+
+	<-doneReading
+	<-doneWriting
 }
 
 func TestBridgeLineToAddrPort(t *testing.T) {

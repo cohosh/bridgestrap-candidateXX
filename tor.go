@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/yawning/bulb"
@@ -38,6 +39,7 @@ type CacheEntry struct {
 type TestCache map[string]*CacheEntry
 
 var cache TestCache = make(TestCache)
+var cacheMutex sync.Mutex
 
 // Regular expressions that match tor's bootstrap status events.
 var success = regexp.MustCompile(`PROGRESS=100`)
@@ -69,11 +71,13 @@ func (tc *TestCache) WriteToDisk(cacheFile string) error {
 	defer fh.Close()
 
 	enc := gob.NewEncoder(fh)
+	cacheMutex.Lock()
 	err = enc.Encode(*tc)
 	if err == nil {
 		log.Printf("Wrote cache with %d elements to %q.",
 			len(*tc), cacheFile)
 	}
+	cacheMutex.Unlock()
 
 	return err
 }
@@ -88,11 +92,13 @@ func (tc *TestCache) ReadFromDisk(cacheFile string) error {
 	defer fh.Close()
 
 	dec := gob.NewDecoder(fh)
+	cacheMutex.Lock()
 	err = dec.Decode(tc)
 	if err == nil {
 		log.Printf("Read cache with %d elements from %q.",
 			len(*tc), cacheFile)
 	}
+	cacheMutex.Unlock()
 
 	return err
 }
@@ -103,18 +109,24 @@ func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 
 	// First, prune expired cache entries.
 	now := time.Now()
+	cacheMutex.Lock()
 	for index, entry := range *tc {
 		if entry.Time.Before(now.Add(-CacheValidity)) {
 			delete(*tc, index)
 		}
 	}
+	cacheMutex.Unlock()
 
 	addrPort, err := BridgeLineToAddrPort(bridgeLine)
 	if err != nil {
 		return nil
 	}
 
-	return (*tc)[addrPort]
+	cacheMutex.Lock()
+	var r *CacheEntry = (*tc)[addrPort]
+	cacheMutex.Unlock()
+
+	return r
 }
 
 // AddEntry adds an entry for the given bridge and test result to our cache.
@@ -131,7 +143,9 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error) {
 	} else {
 		errorStr = result.Error()
 	}
+	cacheMutex.Lock()
 	(*tc)[addrPort] = &CacheEntry{errorStr, time.Now()}
+	cacheMutex.Unlock()
 }
 
 // getDomainSocketPath takes as input the path to our data directory and
