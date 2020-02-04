@@ -200,7 +200,11 @@ func makeControlConnection(domainSocket string) (*bulb.Conn, error) {
 // bootstrapTorOverBridgeWrapped.
 func bootstrapTorOverBridge(bridgeLine string) error {
 	if cacheEntry := cache.IsCached(bridgeLine); cacheEntry != nil {
-		return fmt.Errorf(cacheEntry.Error)
+		if cacheEntry.Error != "" {
+			fmt.Errorf(cacheEntry.Error)
+		} else {
+			return nil
+		}
 	}
 
 	err := bootstrapTorOverBridgeWrapped(bridgeLine)
