@@ -27,7 +27,7 @@ var routes = Routes{
 	Route{
 		"APITestBridge",
 		"POST",
-		"/api/test",
+		"/api/bridge",
 		APITestBridge,
 	},
 }
@@ -100,7 +100,7 @@ func main() {
 			Route{
 				"TestBridge",
 				"POST",
-				"/test",
+				"/bridge",
 				TestBridge,
 			})
 		routes = append(routes,
