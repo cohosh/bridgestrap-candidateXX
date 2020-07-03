@@ -18,7 +18,7 @@ import (
 
 const (
 	// Sixty seconds is a reasonable timeout according to:
-	// <https://bugs.torproject.org/32126#comment:1>
+	// <https://gitlab.torproject.org/legacy/trac/-/issues/32126#note_2338630>
 	TorBootstrapTimeout = 60 * time.Second
 	// Cache test results for one week.
 	CacheValidity = 7 * 24 * time.Hour
