@@ -16,27 +16,29 @@ Then, run the binary:
 
       bridgestrap
 
-By default, bridgestrap will listen on port 5000.  To use its Web interface,
-point your browser to the address and port that bridgestrap is listening on.
-Use the argument `-addr` to listen to a custom address and port.
+By default, bridgestrap will listen on port 5000.  To use its Web interface
+(don't forget to turn it on by using the `-web` switch_), point your browser to
+the address and port that bridgestrap is listening on.  Use the argument
+`-addr` to listen to a custom address and port.
 
 Input
 -----
 
-Clients send bridge lines to a REST API, using an HTTP POST request:
+Clients send bridge lines (in this case `STRING`) to a REST API, using an HTTP
+GET request:
 
-      {"bridge_line": "STRING"}
+      https://HOST/bridge-state?bridge_line=STRING
 
-The value of `bridge_line` can be any bridge line (excluding the "Bridge"
-prefix) that tor accepts.  Here are a few examples:
+The value of `bridge_line` can be any URL-encoded bridge line (excluding the
+"Bridge" prefix) that tor accepts.  Here are a few examples:
 
-* `{"bridge_line": "1.2.3.4:1234"}`
-* `{"bridge_line": "1.2.3.4:1234 1234567890ABCDEF1234567890ABCDEF12345678"}`
-* `{"bridge_line": "obfs4 1.2.3.4:1234 cert=fJRlJc0T7i2Qkw3SyLQq+M6iTGs9ghLHK65LBy/MQewXJpNOKFq63Om1JHVkLlrmEBbX1w iat-mode=0"}`
+* `1.2.3.4%3A1234`
+* `1.2.3.4%3A1234%201234567890ABCDEF1234567890ABCDEF12345678`
+* `obfs4%201.2.3.4%3A1234%20cert%3DfJRlJc0T7i2Qkw3SyLQq%2BM6iTGs9ghLHK65LBy%2FMQewXJpNOKFq63Om1JHVkLlrmEBbX1w%20iat-mode%3D0`
 
 You can test bridgestrap's API as follows:
 
-      curl -X POST localhost:5000/api/test -d '{"bridge_line": "1.2.3.4:1234"}'
+      curl "localhost:5000/bridge-state?bridge_line=1.2.3.4%3A1234"
 
 Output
 ------

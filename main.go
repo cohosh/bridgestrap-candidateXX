@@ -25,10 +25,10 @@ type Routes []Route
 
 var routes = Routes{
 	Route{
-		"APITestBridge",
-		"POST",
-		"/api/bridge",
-		APITestBridge,
+		"BridgeState",
+		"GET",
+		"/bridge-state",
+		BridgeState,
 	},
 }
 
@@ -96,13 +96,6 @@ func main() {
 
 	if web {
 		log.Println("Enabling web interface.")
-		routes = append(routes,
-			Route{
-				"TestBridge",
-				"POST",
-				"/bridge",
-				TestBridge,
-			})
 		routes = append(routes,
 			Route{
 				"Index",

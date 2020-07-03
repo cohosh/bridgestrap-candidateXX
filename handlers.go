@@ -15,11 +15,6 @@ var IndexPage string
 var SuccessPage string
 var FailurePage string
 
-// TestResult represents an incoming JSON request.
-type TestRequest struct {
-	BridgeLine string `json:"bridge_line"`
-}
-
 // TestResult represents the result of a test, sent back to the client as JSON
 // object.
 type TestResult struct {
@@ -93,46 +88,38 @@ func createJsonResult(err error, start time.Time) string {
 	return string(jsonResult)
 }
 
-func APITestBridge(w http.ResponseWriter, r *http.Request) {
+func BridgeState(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
-	var req TestRequest
-	var err error
-
-	decoder := json.NewDecoder(r.Body)
-	if err = decoder.Decode(&req); err != nil {
-		SendJSONResponse(w, createJsonResult(fmt.Errorf("Invalid JSON request."), start))
-		return
-	}
-
-	if req.BridgeLine == "" {
-		SendJSONResponse(w, createJsonResult(fmt.Errorf("No bridge line given."), start))
-		return
-	}
-
-	err = bootstrapTorOverBridge(req.BridgeLine)
-	SendJSONResponse(w, createJsonResult(err, start))
-}
-
-func TestBridge(w http.ResponseWriter, r *http.Request) {
-
-	// Rate-limit requests to prevent someone from abusing this service as a
-	// port scanner.
-	if limiter.Allow() == false {
-		SendHtmlResponse(w, "Rate limit exceeded.")
-		return
-	}
-
 	r.ParseForm()
+	isWebRequest := r.Form.Get("web_request") != ""
+	if isWebRequest {
+		// Rate-limit Web requests to prevent someone from abusing this service
+		// as a port scanner.
+		if limiter.Allow() == false {
+			SendHtmlResponse(w, "Rate limit exceeded.")
+			return
+		}
+	}
+
 	bridgeLine := r.Form.Get("bridge_line")
 	if bridgeLine == "" {
-		SendHtmlResponse(w, "No bridge line given.")
+		if isWebRequest {
+			SendHtmlResponse(w, "No bridge line given.")
+		} else {
+			SendJSONResponse(w, createJsonResult(fmt.Errorf("No bridge line given"), start))
+		}
 		return
 	}
 
-	if err := bootstrapTorOverBridge(bridgeLine); err == nil {
-		SendHtmlResponse(w, SuccessPage)
+	err := bootstrapTorOverBridge(bridgeLine)
+	if isWebRequest {
+		if err := bootstrapTorOverBridge(bridgeLine); err == nil {
+			SendHtmlResponse(w, SuccessPage)
+		} else {
+			SendHtmlResponse(w, FailurePage)
+		}
 	} else {
-		SendHtmlResponse(w, FailurePage)
+		SendJSONResponse(w, createJsonResult(err, start))
 	}
 }
