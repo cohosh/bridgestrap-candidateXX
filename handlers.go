@@ -19,7 +19,7 @@ var FailurePage string
 // object.
 type TestResult struct {
 	Functional bool    `json:"functional"`
-	Error      string  `json:"error"`
+	Error      string  `json:"error,omitempty"`
 	Time       float64 `json:"time"`
 }
 

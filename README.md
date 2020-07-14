@@ -46,19 +46,37 @@ Output
 The service responds with the following JSON:
 
       {
-        "functional": BOOL
-        "error": "STRING"
+        "functional": BOOL,
+        "error": "STRING", (only present if "functional" is false.)
         "time": FLOAT
       }
 
-If tor could bootstrap over the given bridge line, `functional` is `true` and
-`false` otherwise.  If `functional` is `false`, "error" will contain an error
-string.  `time` is a float that represents the number of seconds that
+If tor could bootstrap over the given bridge line, "functional" is "true" and
+"false" otherwise.  If "functional" is "false", "error" will contain an error
+string.  "time" is a float that represents the number of seconds that
 bridgestrap's test took.
 
 Here are a few examples:
 
-* `{"functional":false,"error":"Invalid JSON request.","time":0}`
-* `{"functional":false,"error":"Oct 23 17:36:57.000 [warn] Problem bootstrapping. Stuck at 10%: Finishing handshake with directory server. (DONE; DONE; count 1; recommendation warn; host [REDACTED])","time":32.31}`
-* `{"functional":false,"error":"Oct 23 17:34:57.680 [warn] Too few items to Bridge line.","time":0.013}`
-* `{"functional":true,"error":"","time":13.161}`
+    {
+      "functional":false,
+      "error":"Invalid JSON request.",
+      "time":0
+    }
+
+    {
+      "functional":false,
+      "error":"Oct 23 17:36:57.000 [warn] Problem bootstrapping. Stuck at 10%: Finishing handshake with directory server. (DONE; DONE; count 1; recommendation warn; host [REDACTED])",
+      "time":32.31
+    }
+
+    {
+      "functional":false,
+      "error":"Oct 23 17:34:57.680 [warn] Too few items to Bridge line.",
+      "time":0.013
+    }
+
+    {
+      "functional":true,
+      "time":13.161
+    }

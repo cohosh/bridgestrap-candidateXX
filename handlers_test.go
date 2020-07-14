@@ -16,7 +16,7 @@ func TestCreateJsonResult(t *testing.T) {
 		t.Errorf("Got unexpected JSON: %s", json)
 	}
 
-	expected = `{"functional":true,"error":"","time":1}`
+	expected = `{"functional":true,"time":1}`
 	now = time.Now()
 	then = now.Add(time.Duration(-1) * time.Second)
 	json = createJsonResult(nil, then)
