@@ -17,7 +17,7 @@ Then, run the binary:
       bridgestrap
 
 By default, bridgestrap will listen on port 5000.  To use its Web interface
-(don't forget to turn it on by using the `-web` switch_), point your browser to
+(don't forget to turn it on by using the `-web` switch), point your browser to
 the address and port that bridgestrap is listening on.  Use the argument
 `-addr` to listen to a custom address and port.
 
