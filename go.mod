@@ -1,4 +1,4 @@
-module dip.torproject.org/phw/bridgestrap
+module gitlab.torproject.org/tpo/anti-censorship/bridgestrap
 
 go 1.13
 
