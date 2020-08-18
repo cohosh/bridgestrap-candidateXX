@@ -30,6 +30,12 @@ var routes = Routes{
 		"/bridge-state",
 		BridgeState,
 	},
+	Route{
+		"BridgeStateWeb",
+		"GET",
+		"/result",
+		BridgeStateWeb,
+	},
 }
 
 // Logger logs when we receive requests, and the execution time of handling

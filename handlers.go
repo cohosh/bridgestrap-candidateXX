@@ -23,6 +23,10 @@ type TestResult struct {
 	Time       float64 `json:"time"`
 }
 
+type TestRequest struct {
+	BridgeLine string `json:"bridge_line"`
+}
+
 // limiter implements a rate limiter.  We allow 1 request per second on average
 // with bursts of up to 5 requests per second.
 var limiter = rate.NewLimiter(1, 5)
@@ -91,35 +95,48 @@ func createJsonResult(err error, start time.Time) string {
 func BridgeState(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
-	r.ParseForm()
-	isWebRequest := r.Form.Get("web_request") != ""
-	if isWebRequest {
-		// Rate-limit Web requests to prevent someone from abusing this service
-		// as a port scanner.
-		if limiter.Allow() == false {
-			SendHtmlResponse(w, "Rate limit exceeded.")
-			return
-		}
-	}
 
-	bridgeLine := r.Form.Get("bridge_line")
-	if bridgeLine == "" {
-		if isWebRequest {
-			SendHtmlResponse(w, "No bridge line given.")
-		} else {
-			SendJSONResponse(w, createJsonResult(fmt.Errorf("No bridge line given"), start))
-		}
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		log.Printf("Failed to read HTTP body: %s", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err := bootstrapTorOverBridge(bridgeLine)
-	if isWebRequest {
-		if err := bootstrapTorOverBridge(bridgeLine); err == nil {
-			SendHtmlResponse(w, SuccessPage)
-		} else {
-			SendHtmlResponse(w, FailurePage)
-		}
+	req := &TestRequest{}
+	if err := json.Unmarshal(b, &req); err != nil {
+		log.Printf("Failed to unmarshal HTTP body %q: %s", b, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.BridgeLine == "" {
+		log.Printf("Got request with empty bridge line.")
+		http.Error(w, "no bridge line given", http.StatusBadRequest)
+		return
+	}
+	err = bootstrapTorOverBridge(req.BridgeLine)
+	SendJSONResponse(w, createJsonResult(err, start))
+}
+
+func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
+
+	r.ParseForm()
+	// Rate-limit Web requests to prevent someone from abusing this service
+	// as a port scanner.
+	if limiter.Allow() == false {
+		SendHtmlResponse(w, "Rate limit exceeded.")
+		return
+	}
+	bridgeLine := r.Form.Get("bridge_line")
+	if bridgeLine == "" {
+		SendHtmlResponse(w, "No bridge line given.")
+		return
+	}
+	if err := bootstrapTorOverBridge(bridgeLine); err == nil {
+		SendHtmlResponse(w, SuccessPage)
 	} else {
-		SendJSONResponse(w, createJsonResult(err, start))
+		SendHtmlResponse(w, FailurePage)
 	}
 }

@@ -1,9 +1,9 @@
 Bridgestrap
 ===========
 
-Bridgestrap implements a REST API (for machines) and a Web interface (for
-people) to test a given bridge line by spawning a tor instance and having it
-bootstrap over the bridge line.
+Bridgestrap implements a API (for machines) and a Web interface (for people) to
+test a given bridge line by spawning a tor instance and having it bootstrap
+over the bridge line.
 
 Installation
 ------------
@@ -24,21 +24,25 @@ the address and port that bridgestrap is listening on.  Use the argument
 Input
 -----
 
-Clients send bridge lines (in this case `STRING`) to a REST API, using an HTTP
-GET request:
+Clients send bridge lines to the following API, using an HTTP GET request, and
+place the bridge line in the request body:
 
-      https://HOST/bridge-state?bridge_line=STRING
+      https://HOST/bridge-state
 
-The value of `bridge_line` can be any URL-encoded bridge line (excluding the
-"Bridge" prefix) that tor accepts.  Here are a few examples:
+The request body must look as follows:
 
-* `1.2.3.4%3A1234`
-* `1.2.3.4%3A1234%201234567890ABCDEF1234567890ABCDEF12345678`
-* `obfs4%201.2.3.4%3A1234%20cert%3DfJRlJc0T7i2Qkw3SyLQq%2BM6iTGs9ghLHK65LBy%2FMQewXJpNOKFq63Om1JHVkLlrmEBbX1w%20iat-mode%3D0`
+      {"bridge_line": "BRIDGE_LINE"}
 
-You can test bridgestrap's API as follows:
+The value of "bridge_line" can be any bridge line (excluding the "Bridge"
+prefix) that tor accepts.  Here are a few examples:
 
-      curl "localhost:5000/bridge-state?bridge_line=1.2.3.4%3A1234"
+* `1.2.3.4:1234`
+* `1.2.3.4:1234 1234567890ABCDEF1234567890ABCDEF12345678`
+* `obfs4 1.2.3.4:1234 cert=fJRlJc0T7i2Qkw3SyLQq+M6iTGs9ghLHK65LBy/MQewXJpNOKFq63Om1JHVkLlrmEBbX1w iat-mode=0`
+
+You can test bridgestrap's API over the command line as follows:
+
+      curl -X GET localhost:5000/bridge-state -d '{"bridge_line": "BRIDGE_LINE"}'
 
 Output
 ------
