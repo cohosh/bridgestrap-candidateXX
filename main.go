@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
@@ -114,23 +115,36 @@ func main() {
 	if err := cache.ReadFromDisk(cacheFile); err != nil {
 		log.Printf("Could not read cache because: %s", err)
 	}
-	// When catching SIGINT or SIGTERM, write our cache to disk before exiting.
+
+	var srv http.Server
+	srv.Addr = addr
+	srv.Handler = NewRouter()
+	log.Printf("Starting service on port %s.", addr)
+	go func() {
+		if certFilename != "" && keyFilename != "" {
+			srv.ListenAndServeTLS(certFilename, keyFilename)
+		} else {
+			srv.ListenAndServe()
+		}
+	}()
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT)
 	signal.Notify(signalChan, syscall.SIGTERM)
-	go func() {
-		<-signalChan
-		if err := cache.WriteToDisk(cacheFile); err != nil {
-			log.Printf("Could not write cache because: %s", err)
-		}
-		os.Exit(1)
-	}()
+	log.Printf("Waiting for signal to shut down.")
+	<-signalChan
 
-	router := NewRouter()
-	log.Printf("Starting service on port %s.", addr)
-	if certFilename != "" && keyFilename != "" {
-		log.Fatal(http.ListenAndServeTLS(addr, certFilename, keyFilename, router))
-	} else {
-		log.Fatal(http.ListenAndServe(addr, router))
+	log.Printf("Received signal to shut down.")
+	// Give our Web server a maximum of a minute to shut down, and finish
+	// handling open connections.
+	t := time.Now().Add(time.Minute)
+	ctx, cancel := context.WithDeadline(context.Background(), t)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Failed to shut down Web server: %s", err)
+	}
+
+	if err := cache.WriteToDisk(cacheFile); err != nil {
+		log.Printf("Failed to write cache to disk: %s", err)
 	}
 }
