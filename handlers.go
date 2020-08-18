@@ -8,12 +8,14 @@ import (
 	"log"
 	"net/http"
 	"path"
+	"sync"
 	"time"
 )
 
 var IndexPage string
 var SuccessPage string
 var FailurePage string
+var reqChan = make(chan *TestRequest, 1000)
 
 // TestResult represents the result of a test, sent back to the client as JSON
 // object.
@@ -25,6 +27,7 @@ type TestResult struct {
 
 type TestRequest struct {
 	BridgeLine string `json:"bridge_line"`
+	respChan   chan *TestResult
 }
 
 // limiter implements a rate limiter.  We allow 1 request per second on average
@@ -73,8 +76,37 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	SendHtmlResponse(w, IndexPage)
 }
 
-func createJsonResult(err error, start time.Time) string {
+func dispatchRequests(shutdown chan bool, wg *sync.WaitGroup, numSeconds int) {
 
+	log.Printf("Starting request dispatcher.")
+	delay := time.Tick(time.Second * time.Duration(numSeconds))
+	wg.Add(1)
+	defer wg.Done()
+	defer log.Printf("Stopping request dispatcher.")
+
+	for {
+		select {
+		case <-shutdown:
+			return
+		case req := <-reqChan:
+			log.Printf("Fetching next request; %d requests remain buffered.", len(reqChan))
+			go processRequest(req)
+
+			// Either wait for the delay to expire or the service to shut down;
+			// whatever comes first.
+			select {
+			case <-shutdown:
+				return
+			case <-delay:
+			}
+		}
+	}
+}
+
+func processRequest(req *TestRequest) {
+
+	start := time.Now()
+	err := bootstrapTorOverBridge(req.BridgeLine)
 	end := time.Now()
 	result := &TestResult{
 		Functional: err == nil,
@@ -83,18 +115,10 @@ func createJsonResult(err error, start time.Time) string {
 	if err != nil {
 		result.Error = err.Error()
 	}
-
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		log.Printf("Bug: %s", err)
-	}
-
-	return string(jsonResult)
+	req.respChan <- result
 }
 
 func BridgeState(w http.ResponseWriter, r *http.Request) {
-
-	start := time.Now()
 
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
@@ -116,8 +140,28 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no bridge line given", http.StatusBadRequest)
 		return
 	}
-	err = bootstrapTorOverBridge(req.BridgeLine)
-	SendJSONResponse(w, createJsonResult(err, start))
+
+	var res *TestResult
+	// Do we have the given bridge line cached?  If so, we can respond right
+	// away.
+	if entry := cache.IsCached(req.BridgeLine); entry != nil {
+		res = &TestResult{
+			Functional: entry.Error == "",
+			Error:      entry.Error,
+			Time:       0.0}
+	} else {
+		respChan := make(chan *TestResult)
+		req.respChan = respChan
+		reqChan <- req
+		res = <-respChan
+	}
+
+	jsonResult, err := json.Marshal(res)
+	if err != nil {
+		log.Printf("Bug: %s", err)
+		http.Error(w, "failed to marshal test tesult", http.StatusInternalServerError)
+	}
+	SendJSONResponse(w, string(jsonResult))
 }
 
 func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {

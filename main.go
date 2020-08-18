@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -85,6 +86,7 @@ func main() {
 	var certFilename, keyFilename string
 	var cacheFile string
 	var templatesDir string
+	var numSecs int
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
@@ -92,6 +94,7 @@ func main() {
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
+	flag.IntVar(&numSecs, "seconds", 2, "Number of seconds after two subsequent requests are handled.")
 	flag.Parse()
 
 	var logOutput io.Writer = os.Stderr
@@ -131,12 +134,17 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT)
 	signal.Notify(signalChan, syscall.SIGTERM)
+
+	var wg sync.WaitGroup
+	shutdown := make(chan bool)
+	go dispatchRequests(shutdown, &wg, numSecs)
 	log.Printf("Waiting for signal to shut down.")
 	<-signalChan
+	shutdown <- true
 
 	log.Printf("Received signal to shut down.")
-	// Give our Web server a maximum of a minute to shut down, and finish
-	// handling open connections.
+	// Give our Web server a maximum of a minute to finish handling open
+	// connections and shut down gracefully.
 	t := time.Now().Add(time.Minute)
 	ctx, cancel := context.WithDeadline(context.Background(), t)
 	defer cancel()
@@ -147,4 +155,5 @@ func main() {
 	if err := cache.WriteToDisk(cacheFile); err != nil {
 		log.Printf("Failed to write cache to disk: %s", err)
 	}
+	wg.Wait()
 }
