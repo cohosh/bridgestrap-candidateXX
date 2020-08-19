@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -79,10 +80,22 @@ func NewRouter() *mux.Router {
 	return router
 }
 
+func printPrettyCache() {
+	var shortError string
+	for bridgeLine, cacheEntry := range cache {
+		shortError = cacheEntry.Error
+		maxChars := 50
+		if len(cacheEntry.Error) > maxChars {
+			shortError = cacheEntry.Error[:maxChars]
+		}
+		fmt.Printf("%-22s %-50s %s\n", bridgeLine, shortError, cacheEntry.Time)
+	}
+}
+
 func main() {
 
 	var addr string
-	var web bool
+	var web, printCache bool
 	var certFilename, keyFilename string
 	var cacheFile string
 	var templatesDir string
@@ -90,6 +103,7 @@ func main() {
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
+	flag.BoolVar(&printCache, "print-cache", false, "Print the given cache file and exit.")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
@@ -99,7 +113,9 @@ func main() {
 
 	var logOutput io.Writer = os.Stderr
 	// Send the log output through our scrubber first.
-	log.SetOutput(&safelog.LogScrubber{Output: logOutput})
+	if !printCache {
+		log.SetOutput(&safelog.LogScrubber{Output: logOutput})
+	}
 	log.SetFlags(log.LstdFlags | log.LUTC)
 
 	LoadHtmlTemplates(templatesDir)
@@ -117,6 +133,10 @@ func main() {
 
 	if err := cache.ReadFromDisk(cacheFile); err != nil {
 		log.Printf("Could not read cache because: %s", err)
+	}
+	if printCache {
+		printPrettyCache()
+		return
 	}
 
 	var srv http.Server
