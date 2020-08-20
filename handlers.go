@@ -15,7 +15,7 @@ import (
 var IndexPage string
 var SuccessPage string
 var FailurePage string
-var reqChan = make(chan *TestRequest, 1000)
+var reqChan = make(chan *TestRequest, 10000)
 
 // TestResult represents the result of a test, sent back to the client as JSON
 // object.
