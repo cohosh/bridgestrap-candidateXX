@@ -82,13 +82,22 @@ func NewRouter() *mux.Router {
 
 func printPrettyCache() {
 	var shortError string
+	var numFunctional int
+
 	for bridgeLine, cacheEntry := range cache {
 		shortError = cacheEntry.Error
 		maxChars := 50
 		if len(cacheEntry.Error) > maxChars {
 			shortError = cacheEntry.Error[:maxChars]
 		}
+		if cacheEntry.Error == "" {
+			numFunctional++
+		}
 		fmt.Printf("%-22s %-50s %s\n", bridgeLine, shortError, cacheEntry.Time)
+	}
+	if len(cache) > 0 {
+		log.Printf("Found %d (%.2f%%) out of %d functional.\n", numFunctional,
+			float64(numFunctional)/float64(len(cache))*100.0, len(cache))
 	}
 }
 
