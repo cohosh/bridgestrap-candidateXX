@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"testing"
@@ -104,6 +106,30 @@ func TestCacheExpiration(t *testing.T) {
 	e = cache.IsCached(bridgeLine2)
 	if e == nil {
 		t.Errorf("Valid cache entry was incorrectly pruned.")
+	}
+}
+
+func BenchmarkIsCached(b *testing.B) {
+
+	getRandAddrPort := func() string {
+		return fmt.Sprintf("%d.%d.%d.%d:%d",
+			rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(65536))
+	}
+	getRandError := func() error {
+		errors := []error{nil, errors.New("censorship"), errors.New("no censorship")}
+		return errors[rand.Intn(len(errors))]
+	}
+
+	numCacheEntries := 10000
+	cache := make(TestCache)
+	for i := 0; i < numCacheEntries; i++ {
+		cache.AddEntry(getRandAddrPort(), getRandError())
+	}
+
+	// How long does it take to iterate over numCacheEntries cache entries?
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cache.IsCached("invalid bridge line")
 	}
 }
 
