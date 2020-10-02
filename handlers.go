@@ -160,6 +160,7 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Bug: %s", err)
 		http.Error(w, "failed to marshal test tesult", http.StatusInternalServerError)
+		return
 	}
 	SendJSONResponse(w, string(jsonResult))
 }
