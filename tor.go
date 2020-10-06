@@ -108,7 +108,7 @@ func (tc *TestCache) ReadFromDisk(cacheFile string) error {
 func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 
 	// First, prune expired cache entries.
-	now := time.Now()
+	now := time.Now().UTC()
 	cacheMutex.Lock()
 	for index, entry := range *tc {
 		if entry.Time.Before(now.Add(-CacheValidity)) {
