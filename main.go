@@ -141,7 +141,7 @@ func main() {
 	}
 
 	if err := cache.ReadFromDisk(cacheFile); err != nil {
-		log.Printf("Could not read cache because: %s", err)
+		log.Printf("Could not read cache: %s", err)
 	}
 	if printCache {
 		printPrettyCache()
