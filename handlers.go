@@ -2,37 +2,50 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/time/rate"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
-	"sync"
 	"time"
 )
 
 var IndexPage string
 var SuccessPage string
 var FailurePage string
-var reqChan = make(chan *TestRequest, 10000)
 
-// TestResult represents the result of a test, sent back to the client as JSON
-// object.
-type TestResult struct {
-	Functional bool    `json:"functional"`
-	Error      string  `json:"error,omitempty"`
-	Time       float64 `json:"time"`
+// BridgeTest represents the result of a bridge test, sent back to the client
+// as JSON object.
+type BridgeTest struct {
+	Functional bool   `json:"functional"`
+	Error      string `json:"error,omitempty"`
 }
 
+// TestResult represents the result of a test.
+type TestResult struct {
+	Bridges map[string]*BridgeTest `json:"bridge_results"`
+	Time    float64                `json:"time"`
+	Error   string                 `json:"error,omitempty"`
+}
+
+// TestRequest represents a client's request to test a batch of bridges.
 type TestRequest struct {
-	BridgeLine string `json:"bridge_line"`
-	respChan   chan *TestResult
+	BridgeLines []string `json:"bridge_lines"`
+	Error       string   `json:"error,omitempty"`
 }
 
 // limiter implements a rate limiter.  We allow 1 request per second on average
 // with bursts of up to 5 requests per second.
 var limiter = rate.NewLimiter(1, 5)
+
+func NewTestResult() *TestResult {
+
+	t := &TestResult{}
+	t.Bridges = make(map[string]*BridgeTest)
+	return t
+}
 
 // LoadHtmlTemplates loads all HTML templates from the given directory.
 func LoadHtmlTemplates(dir string) {
@@ -76,46 +89,41 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	SendHtmlResponse(w, IndexPage)
 }
 
-func dispatchRequests(shutdown chan bool, wg *sync.WaitGroup, numSeconds int) {
+func testBridgeLines(bridgeLines []string) *TestResult {
 
-	log.Printf("Starting request dispatcher.")
-	delay := time.Tick(time.Second * time.Duration(numSeconds))
-	wg.Add(1)
-	defer wg.Done()
-	defer log.Printf("Stopping request dispatcher.")
-
-	for {
-		select {
-		case <-shutdown:
-			return
-		case req := <-reqChan:
-			log.Printf("Fetching next request; %d requests remain buffered.", len(reqChan))
-			go processRequest(req)
-
-			// Either wait for the delay to expire or the service to shut down;
-			// whatever comes first.
-			select {
-			case <-shutdown:
-				return
-			case <-delay:
-			}
+	// Add cached bridge lines to the result.
+	result := NewTestResult()
+	remainingBridgeLines := []string{}
+	numCached := 0
+	for _, bridgeLine := range bridgeLines {
+		if entry := cache.IsCached(bridgeLine); entry != nil {
+			numCached++
+			result.Bridges[bridgeLine] = &BridgeTest{Functional: entry.Error == "",
+				Error: entry.Error}
+		} else {
+			remainingBridgeLines = append(remainingBridgeLines, bridgeLine)
 		}
 	}
-}
 
-func processRequest(req *TestRequest) {
+	// Test whatever bridges remain.
+	if len(remainingBridgeLines) > 0 {
+		log.Printf("%d bridge lines served from cache; testing remaining %d bridge lines.",
+			numCached, len(remainingBridgeLines))
 
-	start := time.Now()
-	err := bootstrapTorOverBridge(req.BridgeLine)
-	end := time.Now()
-	result := &TestResult{
-		Functional: err == nil,
-		Error:      "",
-		Time:       float64(end.Sub(start).Milliseconds()) / 1000}
-	if err != nil {
-		result.Error = err.Error()
+		start := time.Now()
+		partialResult := torCtx.TestBridgeLines(remainingBridgeLines)
+		result.Time = float64(time.Now().Sub(start).Seconds())
+
+		// Cache partial test results and add them to our existing result object.
+		for bridgeLine, bridgeTest := range partialResult.Bridges {
+			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error))
+			result.Bridges[bridgeLine] = bridgeTest
+		}
+	} else {
+		log.Printf("All %d bridge lines served from cache.  No need for testing.", numCached)
 	}
-	req.respChan <- result
+
+	return result
 }
 
 func BridgeState(w http.ResponseWriter, r *http.Request) {
@@ -135,28 +143,22 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.BridgeLine == "" {
-		log.Printf("Got request with empty bridge line.")
-		http.Error(w, "no bridge line given", http.StatusBadRequest)
+	if len(req.BridgeLines) == 0 {
+		log.Printf("Got request with no bridge lines.")
+		http.Error(w, "no bridge lines given", http.StatusBadRequest)
 		return
 	}
 
-	var res *TestResult
-	// Do we have the given bridge line cached?  If so, we can respond right
-	// away.
-	if entry := cache.IsCached(req.BridgeLine); entry != nil {
-		res = &TestResult{
-			Functional: entry.Error == "",
-			Error:      entry.Error,
-			Time:       0.0}
-	} else {
-		respChan := make(chan *TestResult)
-		req.respChan = respChan
-		reqChan <- req
-		res = <-respChan
+	if len(req.BridgeLines) > MaxBridgesPerReq {
+		log.Printf("Got %d bridges in request but we only allow <= %d.", len(req.BridgeLines), MaxBridgesPerReq)
+		http.Error(w, fmt.Sprintf("maximum of %d bridge lines allowed", MaxBridgesPerReq), http.StatusBadRequest)
+		return
 	}
 
-	jsonResult, err := json.Marshal(res)
+	log.Printf("Got %d bridge lines from %s.", len(req.BridgeLines), r.RemoteAddr)
+	result := testBridgeLines(req.BridgeLines)
+
+	jsonResult, err := json.Marshal(result)
 	if err != nil {
 		log.Printf("Bug: %s", err)
 		http.Error(w, "failed to marshal test tesult", http.StatusInternalServerError)
@@ -179,7 +181,16 @@ func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 		SendHtmlResponse(w, "No bridge line given.")
 		return
 	}
-	if err := bootstrapTorOverBridge(bridgeLine); err == nil {
+
+	result := testBridgeLines([]string{bridgeLine})
+	bridgeResult, exists := result.Bridges[bridgeLine]
+	if !exists {
+		log.Printf("Bug: Test result not part of our result map.")
+		SendHtmlResponse(w, FailurePage)
+		return
+	}
+
+	if bridgeResult.Functional {
 		SendHtmlResponse(w, SuccessPage)
 	} else {
 		SendHtmlResponse(w, FailurePage)

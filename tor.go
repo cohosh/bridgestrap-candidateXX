@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,135 +18,33 @@ import (
 )
 
 const (
-	// Sixty seconds is a reasonable timeout according to:
-	// <https://gitlab.torproject.org/legacy/trac/-/issues/32126#note_2338630>
-	TorBootstrapTimeout = 60 * time.Second
-	// Cache test results for one week.
-	CacheValidity = 7 * 24 * time.Hour
+	// We're using the following default bridges to bootstrap our Tor instance.
+	// Once it's bootstrapped, we no longer need them.
+	DefaultBridge1 = "obfs4 192.95.36.142:443 CDF2E852BF539B82BD10E27E9115A31734E378C2 cert=qUVQ0srL1JI/vO6V6m/24anYXiJD3QP2HgzUKQtQ7GRqqUvs7P+tG43RtAqdhLOALP7DJQ iat-mode=1"
+	DefaultBridge2 = "obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=4TLQPJrTSaDffMK7Nbao6LC7G9OW/NHkUwIdjLSS3KYf0Nv4/nQiiI8dY2TcsQx01NniOg iat-mode=0"
+	DefaultBridge3 = "obfs4 37.218.245.14:38224 D9A82D2F9C2F65A18407B1D2B764F130847F8B5D cert=bjRaMrr1BRiAW8IE9U5z27fQaYgOhX1UCmOpg2pFpoMvo6ZgQMzLsaTzzQNTlm7hNcb+Sg iat-mode=0"
+	// The amount of time we give Tor to test a batch of bridges.
+	TorTestTimeout = time.Minute
+	// The maximum amount of bridges per batch.
+	MaxBridgesPerReq = 100
 )
 
-// CacheEntry represents an entry in our cache of bridges that we recently
-// tested.  Error is nil if a bridge works, and otherwise holds an error
-// string.  Time determines when we tested the bridge.
-type CacheEntry struct {
-	// We're using a string instead of an error here because golang's gob
-	// package doesn't know how to deal with an error:
-	// <https://github.com/golang/go/issues/23340>
-	Error string
-	Time  time.Time
-}
+// getBridgeIdentifier turns the given bridgeLine into a canonical identifier
+// that we use to look for relevant ORCONN events.  If the given bridge line
+// contains a fingerprint, the function returns $FINGERPRINT.  If it doesn't,
+// the function returns the address:port tuple of the given bridge line.
+func getBridgeIdentifier(bridgeLine string) (string, error) {
 
-// TestCache maps a bridge's addr:port tuple to a cache entry.
-type TestCache map[string]*CacheEntry
+	re := regexp.MustCompile(`([A-F0-9]{40})`)
+	if result := string(re.Find([]byte(bridgeLine))); result != "" {
+		return "$" + result, nil
+	}
 
-var cache TestCache = make(TestCache)
-var cacheMutex sync.Mutex
-
-// Regular expressions that match tor's bootstrap status events.
-var success = regexp.MustCompile(`PROGRESS=100`)
-var warning = regexp.MustCompile(`STATUS_CLIENT WARN BOOTSTRAP`)
-
-// BridgeLineToAddrPort takes a bridge line as input and returns a string
-// consisting of the bridge's addr:port.
-func BridgeLineToAddrPort(bridgeLine string) (string, error) {
-
-	// Represents an addr:port tuple.
-	re := regexp.MustCompile(`(?:[0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}`)
-	result := string(re.Find([]byte(bridgeLine)))
-
-	if result == "" {
-		return result, fmt.Errorf("could not extract addr:port from bridge line")
-	} else {
+	if result := string(AddrPortBridgeLine.Find([]byte(bridgeLine))); result != "" {
 		return result, nil
 	}
-}
 
-// WriteToDisk writes our test result cache to disk, allowing it to persist
-// across program restarts.
-func (tc *TestCache) WriteToDisk(cacheFile string) error {
-
-	fh, err := os.Create(cacheFile)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	enc := gob.NewEncoder(fh)
-	cacheMutex.Lock()
-	err = enc.Encode(*tc)
-	if err == nil {
-		log.Printf("Wrote cache with %d elements to %q.",
-			len(*tc), cacheFile)
-	}
-	cacheMutex.Unlock()
-
-	return err
-}
-
-// ReadFromDisk reads our test result cache from disk.
-func (tc *TestCache) ReadFromDisk(cacheFile string) error {
-
-	fh, err := os.Open(cacheFile)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	dec := gob.NewDecoder(fh)
-	cacheMutex.Lock()
-	err = dec.Decode(tc)
-	if err == nil {
-		log.Printf("Read cache with %d elements from %q.",
-			len(*tc), cacheFile)
-	}
-	cacheMutex.Unlock()
-
-	return err
-}
-
-// IsCached returns a cache entry if the given bridge line has been tested
-// recently (as determined by CacheValidity), and nil otherwise.
-func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
-
-	// First, prune expired cache entries.
-	now := time.Now().UTC()
-	cacheMutex.Lock()
-	for index, entry := range *tc {
-		if entry.Time.Before(now.Add(-CacheValidity)) {
-			delete(*tc, index)
-		}
-	}
-	cacheMutex.Unlock()
-
-	addrPort, err := BridgeLineToAddrPort(bridgeLine)
-	if err != nil {
-		return nil
-	}
-
-	cacheMutex.Lock()
-	var r *CacheEntry = (*tc)[addrPort]
-	cacheMutex.Unlock()
-
-	return r
-}
-
-// AddEntry adds an entry for the given bridge and test result to our cache.
-func (tc *TestCache) AddEntry(bridgeLine string, result error) {
-
-	addrPort, err := BridgeLineToAddrPort(bridgeLine)
-	if err != nil {
-		return
-	}
-
-	var errorStr string
-	if result == nil {
-		errorStr = ""
-	} else {
-		errorStr = result.Error()
-	}
-	cacheMutex.Lock()
-	(*tc)[addrPort] = &CacheEntry{errorStr, time.Now()}
-	cacheMutex.Unlock()
+	return "", errors.New("could not extract bridge identifier")
 }
 
 // getDomainSocketPath takes as input the path to our data directory and
@@ -154,19 +53,20 @@ func getDomainSocketPath(dataDir string) string {
 	return fmt.Sprintf("%s/control-socket", dataDir)
 }
 
-// writeConfigToTorrc writes the content of a Tor config file (including the
-// given bridgeLine and dataDir) to the given file handle.
-func writeConfigToTorrc(tmpFh io.Writer, dataDir, bridgeLine string) error {
+// writeConfigToTorrc writes a Tor config file to the given file handle.
+func writeConfigToTorrc(tmpFh io.Writer, dataDir string) error {
 
 	_, err := fmt.Fprintf(tmpFh, "UseBridges 1\n"+
 		"ControlPort unix:%s\n"+
 		"SocksPort auto\n"+
 		"SafeLogging 0\n"+
-		"__DisablePredictedCircuits\n"+
+		"Log info file %s/tor.log\n"+
 		"DataDirectory %s\n"+
-		"ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n"+
-		"PathsNeededToBuildCircuits 0.25\n"+
-		"Bridge %s", getDomainSocketPath(dataDir), dataDir, bridgeLine)
+		"ClientTransportPlugin obfs2,obfs3,obfs4,scramblesuit exec /usr/bin/obfs4proxy\n"+
+		"Bridge %s\n"+
+		"Bridge %s\n"+
+		"Bridge %s\n", getDomainSocketPath(dataDir), dataDir, dataDir,
+		DefaultBridge1, DefaultBridge2, DefaultBridge3)
 
 	return err
 }
@@ -184,107 +84,194 @@ func makeControlConnection(domainSocket string) (*bulb.Conn, error) {
 	for attempts := 0; attempts < 10; attempts++ {
 		torCtrl, err = bulb.Dial("unix", domainSocket)
 		if err == nil {
+			torCtrl.Debug(true)
 			if err := torCtrl.Authenticate(""); err != nil {
 				return nil, fmt.Errorf("authentication with tor's control port failed: %v", err)
 			}
 			return torCtrl, nil
 		} else {
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Second)
 		}
 	}
 
 	return nil, fmt.Errorf("unable to connect to domain socket")
 }
 
-// bootstrapTorOverBridge implements a cache around
-// bootstrapTorOverBridgeWrapped.
-func bootstrapTorOverBridge(bridgeLine string) error {
-	if cacheEntry := cache.IsCached(bridgeLine); cacheEntry != nil {
-		if cacheEntry.Error != "" {
-			return fmt.Errorf(cacheEntry.Error)
-		} else {
-			return nil
+// TorContext represents the data structures and methods we need to control a
+// Tor process.
+type TorContext struct {
+	sync.Mutex
+	Ctrl      *bulb.Conn
+	DataDir   string
+	Cancel    context.CancelFunc
+	Context   context.Context
+	eventChan chan *bulb.Response
+}
+
+// Stop stops the Tor process.  Errors during cleanup are logged and the last
+// occuring error is returned.
+func (c *TorContext) Stop() error {
+	c.Lock()
+	defer c.Unlock()
+
+	var err error
+	log.Println("Stopping Tor process.")
+	c.Cancel()
+
+	if c.Ctrl != nil {
+		if err = c.Ctrl.Close(); err != nil {
+			log.Printf("Failed to close control connection: %s", err)
 		}
 	}
 
-	err := bootstrapTorOverBridgeWrapped(bridgeLine)
-	cache.AddEntry(bridgeLine, err)
-
+	if err = os.RemoveAll(c.DataDir); err != nil {
+		log.Printf("Failed to remove data directory: %s", err)
+	}
 	return err
 }
 
-// bootstrapTorOverBridgeWrapped attempts to bootstrap a Tor connection over
-// the given bridge line.  This function returns nil if the bootstrap succeeds
-// and an error otherwise.
-func bootstrapTorOverBridgeWrapped(bridgeLine string) error {
+// Start starts the Tor process.
+func (c *TorContext) Start() error {
+	c.Lock()
+	defer c.Unlock()
+	log.Println("Starting Tor process.")
+
+	c.eventChan = make(chan *bulb.Response, 100)
+
+	// Create Tor's data directory.
+	var err error
+	c.DataDir, err = ioutil.TempDir(os.TempDir(), "tor-datadir-")
+	if err != nil {
+		return err
+	}
+	log.Printf("Created data directory %q.", c.DataDir)
 
 	// Create our torrc.
-	tmpFh, err := ioutil.TempFile(os.TempDir(), "torrc-")
+	tmpFh, err := ioutil.TempFile(c.DataDir, "torrc-")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFh.Name())
-
-	// Create our data directory.
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "tor-datadir-")
-	if err != nil {
+	if err = writeConfigToTorrc(tmpFh, c.DataDir); err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	log.Println("Wrote Tor config file.")
 
-	if err = writeConfigToTorrc(tmpFh, tmpDir, bridgeLine); err != nil {
-		return err
-	}
-
-	// Terminate our process after one minute.
-	ctx, cancel := context.WithTimeout(context.Background(), TorBootstrapTimeout)
-	defer cancel()
-
-	log.Printf("Testing bridge line %q.", bridgeLine)
-	// Start tor but don't wait for the process to complete, so our call
-	// returns right away.
-	cmd := exec.CommandContext(ctx, "tor", "-f", tmpFh.Name())
+	// Start our Tor process.
+	c.Context, c.Cancel = context.WithCancel(context.Background())
+	cmd := exec.CommandContext(c.Context, "tor", "-f", tmpFh.Name())
 	if err = cmd.Start(); err != nil {
 		return err
 	}
+	log.Println("Started Tor process.")
 
-	torCtrl, err := makeControlConnection(getDomainSocketPath(tmpDir))
+	// Start a control connection with our Tor process.
+	c.Ctrl, err = makeControlConnection(getDomainSocketPath(c.DataDir))
 	if err != nil {
+		return nil
+	}
+	c.Ctrl.StartAsyncReader()
+	go c.eventReader()
+
+	if _, err := c.Ctrl.Request("SETEVENTS ORCONN NEWDESC"); err != nil {
 		return err
 	}
-	defer torCtrl.Close()
 
-	// Start our async reader and listen for STATUS_CLIENT events, which
-	// include bootstrap messages:
-	// <https://gitweb.torproject.org/torspec.git/tree/control-spec.txt?id=b7cfa8619947be4a377366365f5ddee8e0733330#n2499>
-	torCtrl.StartAsyncReader()
-	if _, err := torCtrl.Request("SETEVENTS STATUS_CLIENT"); err != nil {
-		return fmt.Errorf("command SETEVENTS STATUS_CLIENT failed: %v", err)
+	return nil
+}
+
+// TestBridgeLines takes as input a list of bridge lines, tells Tor to test
+// them, and returns the resulting TestResult.
+func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
+	c.Lock()
+	defer c.Unlock()
+
+	if len(bridgeLines) == 0 {
+		return NewTestResult()
 	}
 
-	// Keep reading events until one of the following happens:
-	// 1) tor bootstrapped to 100%
-	// 2) tor encountered a warning while bootstrapping
-	// 3) we hit our timeout, which interrupts our call to NextEvent()
-	for {
-		ev, err := torCtrl.NextEvent()
+	result := NewTestResult()
+	log.Printf("Testing %d bridge lines.", len(bridgeLines))
+
+	// Create our SETCONF line, which tells Tor what bridges it should test.
+	// It has the following format:
+	//   SETCONF Bridge="BRIDGE1" Bridge="BRIDGE2" ...
+	cmdPieces := []string{"SETCONF"}
+	for _, bridgeLine := range bridgeLines {
+		cmdPieces = append(cmdPieces, fmt.Sprintf("Bridge=%q", bridgeLine))
+	}
+	cmd := strings.Join(cmdPieces, " ")
+
+	if _, err := c.Ctrl.Request(cmd); err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
+	// We maintain per-bridge state machines that parse Tor's event output.
+	eventParsers := make(map[string]*TorEventState)
+	for _, bridgeLine := range bridgeLines {
+		identifier, err := getBridgeIdentifier(bridgeLine)
 		if err != nil {
-			return fmt.Errorf("timed out waiting for Tor to bootstrap")
+			log.Printf("Bug: Could not extract identifier from bridge line %q.", bridgeLine)
+			continue
 		}
-		for _, line := range ev.RawLines {
-			if success.MatchString(line) {
-				return nil
-			} else if warning.MatchString(line) {
-				re := regexp.MustCompile(`WARNING="([^"]*)"`)
-				matches := re.FindStringSubmatch(line)
-				if len(matches) != 2 {
-					log.Printf("Unexpected number of substring matches: %q", matches)
-					return fmt.Errorf("could not bootstrap")
+		eventParsers[bridgeLine] = NewTorEventState(identifier)
+	}
+
+	log.Printf("Waiting for Tor to give us test results.")
+	timeout := time.After(TorTestTimeout)
+	for {
+		select {
+		case ev := <-c.eventChan:
+			for _, line := range ev.RawLines {
+				for bridgeLine, parser := range eventParsers {
+					// Skip bridges that are done testing.
+					if parser.State != BridgeStatePending {
+						continue
+					}
+					parser.Feed(line)
+					if parser.State == BridgeStateSuccess {
+						log.Printf("Setting %s to 'true'", bridgeLine)
+						result.Bridges[bridgeLine] = &BridgeTest{Functional: true}
+					} else if parser.State == BridgeStateFailure {
+						log.Printf("Setting %s to 'false'", bridgeLine)
+						result.Bridges[bridgeLine] = &BridgeTest{Functional: false, Error: parser.Reason}
+					}
 				}
-				return fmt.Errorf(matches[1])
+
+				// Do we have test results for all bridges?  If so, we're done.
+				if len(result.Bridges) == len(bridgeLines) {
+					return result
+				}
 			}
+		case <-timeout:
+			log.Printf("Tor process timed out.")
+
+			// Mark whatever bridge results we're missing as nonfunctional.
+			for _, bridgeLine := range bridgeLines {
+				if _, exists := result.Bridges[bridgeLine]; !exists {
+					result.Bridges[bridgeLine] = &BridgeTest{Functional: false,
+						Error: "timed out waiting for bridge descriptor"}
+				}
+			}
+			return result
 		}
 	}
 
-	return fmt.Errorf("could not bootstrap")
+	return result
+}
+
+// eventReader reads events from Tor's control port and writes them to
+// c.eventChan, allowing TestBridgeLines to read Tor's events in a select
+// statement.
+func (c *TorContext) eventReader() {
+	log.Println("Starting event reader.")
+	defer log.Printf("Stopping event reader.")
+	for {
+		ev, err := c.Ctrl.NextEvent()
+		if err != nil {
+			close(c.eventChan)
+			return
+		}
+		c.eventChan <- ev
+	}
 }

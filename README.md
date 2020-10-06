@@ -1,9 +1,9 @@
 Bridgestrap
 ===========
 
-Bridgestrap implements a API (for machines) and a Web interface (for people) to
-test a given bridge line by spawning a tor instance and having it bootstrap
-over the bridge line.
+Bridgestrap implements an API (for machines) and a Web interface (for people)
+to test Tor bridge lines by making a Tor instance fetch the bridges'
+descriptor.
 
 Installation
 ------------
@@ -24,17 +24,17 @@ the address and port that bridgestrap is listening on.  Use the argument
 Input
 -----
 
-Clients send bridge lines to the following API, using an HTTP GET request, and
-place the bridge line in the request body:
+Clients send one or more bridge lines to the following API, using an HTTP GET
+request, and place the bridge lines in the request body:
 
       https://HOST/bridge-state
 
 The request body must look as follows:
 
-      {"bridge_line": "BRIDGE_LINE"}
+      {"bridge_lines": ["BRIDGE_LINE_1", ..., "BRIDGE_LINE_N"]}
 
-The value of "bridge_line" can be any bridge line (excluding the "Bridge"
-prefix) that tor accepts.  Here are a few examples:
+The "BRIDGE_LINE" strings in the list may contain any bridge line (excluding
+the "Bridge" prefix) that tor accepts.  Here are a few examples:
 
 * `1.2.3.4:1234`
 * `1.2.3.4:1234 1234567890ABCDEF1234567890ABCDEF12345678`
@@ -42,7 +42,10 @@ prefix) that tor accepts.  Here are a few examples:
 
 You can test bridgestrap's API over the command line as follows:
 
-      curl -X GET localhost:5000/bridge-state -d '{"bridge_line": "BRIDGE_LINE"}'
+      curl -X GET localhost:5000/bridge-state -d '{"bridge_lines": ["BRIDGE_LINE"]}'
+
+You can also use the script test-bridge-lines in the "script" directory to test
+a batch of bridge lines.
 
 Output
 ------
@@ -50,37 +53,59 @@ Output
 The service responds with the following JSON:
 
       {
-        "functional": BOOL,
-        "error": "STRING", (only present if "functional" is false.)
+        "bridge_results": {
+          "BRIDGE_LINE_1": {
+            "functional: BOOL,
+            "error": "STRING", (only present if "functional" is false)
+          },
+          ...
+          "BRIDGE_LINE_N": {
+            ...
+          }
+        },
+        "error": "STRING", (only present if the entire test failed)
         "time": FLOAT
       }
 
-If tor could bootstrap over the given bridge line, "functional" is "true" and
-"false" otherwise.  If "functional" is "false", "error" will contain an error
-string.  "time" is a float that represents the number of seconds that
-bridgestrap's test took.
+In a nutshell, the "bridge_results" dictionary maps bridge lines (as they were
+provided in the request) to a dictionary consisting of two keys: "functional"
+is set to "true" if tor could fetch the bridge's descriptor.  If tor was unable
+to fetch the bridge's descriptor, "functional" is set to "false" and the
+"error" key maps to an error string.
+
+In addition to the "bridge_results" dictionary, the response may contain an
+optional "error" key if the entire test failed (e.g. if bridgestrap failed to
+communicate with its tor instance).  Finally, "time" is a float that represents
+the number of seconds that the test took.
 
 Here are a few examples:
 
     {
-      "functional":false,
-      "error":"Invalid JSON request.",
-      "time":0
+      "bridge_results": {
+      },
+      "error": "something truly ominous happened",
+      "time": 0.32
     }
 
     {
-      "functional":false,
-      "error":"Oct 23 17:36:57.000 [warn] Problem bootstrapping. Stuck at 10%: Finishing handshake with directory server. (DONE; DONE; count 1; recommendation warn; host [REDACTED])",
-      "time":32.31
+      "bridge_results": {
+        "obfs4 1.2.3.4:1234 cert=fJRlJc0T7i2Qkw3SyLQq+M6iTGs9ghLHK65LBy/MQewXJpNOKFq63Om1JHVkLlrmEBbX1w iat-mode=0": {
+          "functional": true
+        },
+        "1.2.3.4:1234": {
+          "functional": false,
+          "error": "timed out waiting for bridge descriptor"
+        }
+      },
+      "time": 3.1824
     }
 
     {
-      "functional":false,
-      "error":"Oct 23 17:34:57.680 [warn] Too few items to Bridge line.",
-      "time":0.013
-    }
-
-    {
-      "functional":true,
-      "time":13.161
+      "bridge_results": {
+        "1.2.3.4:1234 1234567890ABCDEF1234567890ABCDEF12345678": {
+          "functional": false,
+          "error": "timed out waiting for bridge descriptor"
+        }
+      },
+      "time": 0
     }
