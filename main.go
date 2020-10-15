@@ -109,7 +109,7 @@ func main() {
 
 	var err error
 	var addr string
-	var web, printCache bool
+	var web, printCache, unsafeLogging bool
 	var certFilename, keyFilename string
 	var cacheFile string
 	var templatesDir string
@@ -118,6 +118,7 @@ func main() {
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
 	flag.BoolVar(&printCache, "print-cache", false, "Print the given cache file and exit.")
+	flag.BoolVar(&unsafeLogging, "unsafe", false, "Don't scrub IP addresses in log messages.")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
@@ -127,7 +128,7 @@ func main() {
 
 	var logOutput io.Writer = os.Stderr
 	// Send the log output through our scrubber first.
-	if !printCache {
+	if !printCache && !unsafeLogging {
 		log.SetOutput(&safelog.LogScrubber{Output: logOutput})
 	}
 	log.SetFlags(log.LstdFlags | log.LUTC)
