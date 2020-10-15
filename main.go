@@ -132,10 +132,9 @@ func main() {
 	}
 	log.SetFlags(log.LstdFlags | log.LUTC)
 
-	LoadHtmlTemplates(templatesDir)
-
 	if web {
 		log.Println("Enabling web interface.")
+		LoadHtmlTemplates(templatesDir)
 		routes = append(routes,
 			Route{
 				"Index",
