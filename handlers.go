@@ -33,7 +33,6 @@ type TestResult struct {
 // TestRequest represents a client's request to test a batch of bridges.
 type TestRequest struct {
 	BridgeLines []string `json:"bridge_lines"`
-	Error       string   `json:"error,omitempty"`
 }
 
 // limiter implements a rate limiter.  We allow 1 request per second on average
