@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -23,6 +22,8 @@ type Route struct {
 	Pattern     string
 	HandlerFunc http.HandlerFunc
 }
+
+var torCtx *TorContext
 
 type Routes []Route
 
@@ -40,6 +41,9 @@ var routes = Routes{
 		BridgeStateWeb,
 	},
 }
+
+// tmpDataDir contains the path to Tor's data directory.
+var tmpDataDir string
 
 // Logger logs when we receive requests, and the execution time of handling
 // these requests.  We don't log client IP addresses or the given obfs4
@@ -103,8 +107,9 @@ func printPrettyCache() {
 
 func main() {
 
+	var err error
 	var addr string
-	var web, printCache bool
+	var web, printCache, unsafeLogging bool
 	var certFilename, keyFilename string
 	var cacheFile string
 	var templatesDir string
@@ -113,24 +118,24 @@ func main() {
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
 	flag.BoolVar(&printCache, "print-cache", false, "Print the given cache file and exit.")
+	flag.BoolVar(&unsafeLogging, "unsafe", false, "Don't scrub IP addresses in log messages.")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
-	flag.IntVar(&numSecs, "seconds", 2, "Number of seconds after two subsequent requests are handled.")
+	flag.IntVar(&numSecs, "seconds", 0, "Number of seconds after two subsequent requests are handled.")
 	flag.Parse()
 
 	var logOutput io.Writer = os.Stderr
 	// Send the log output through our scrubber first.
-	if !printCache {
+	if !printCache && !unsafeLogging {
 		log.SetOutput(&safelog.LogScrubber{Output: logOutput})
 	}
 	log.SetFlags(log.LstdFlags | log.LUTC)
 
-	LoadHtmlTemplates(templatesDir)
-
 	if web {
 		log.Println("Enabling web interface.")
+		LoadHtmlTemplates(templatesDir)
 		routes = append(routes,
 			Route{
 				"Index",
@@ -140,11 +145,17 @@ func main() {
 			})
 	}
 
-	if err := cache.ReadFromDisk(cacheFile); err != nil {
-		log.Printf("Could not read cache because: %s", err)
+	if err = cache.ReadFromDisk(cacheFile); err != nil {
+		log.Printf("Could not read cache: %s", err)
 	}
 	if printCache {
 		printPrettyCache()
+		return
+	}
+
+	torCtx = &TorContext{}
+	if err = torCtx.Start(); err != nil {
+		log.Printf("Failed to start Tor process: %s", err)
 		return
 	}
 
@@ -164,14 +175,14 @@ func main() {
 	signal.Notify(signalChan, syscall.SIGINT)
 	signal.Notify(signalChan, syscall.SIGTERM)
 
-	var wg sync.WaitGroup
-	shutdown := make(chan bool)
-	go dispatchRequests(shutdown, &wg, numSecs)
 	log.Printf("Waiting for signal to shut down.")
 	<-signalChan
-	shutdown <- true
-
 	log.Printf("Received signal to shut down.")
+
+	if err := torCtx.Stop(); err != nil {
+		log.Printf("Failed to clean up after Tor: %s", err)
+	}
+
 	// Give our Web server a maximum of a minute to finish handling open
 	// connections and shut down gracefully.
 	t := time.Now().Add(time.Minute)
@@ -184,5 +195,4 @@ func main() {
 	if err := cache.WriteToDisk(cacheFile); err != nil {
 		log.Printf("Failed to write cache to disk: %s", err)
 	}
-	wg.Wait()
 }

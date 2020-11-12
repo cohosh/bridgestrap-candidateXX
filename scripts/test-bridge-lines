@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Test a batch of bridge lines by running:
+#   ./test-bridge-lines /path/to/file
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 BRIDGE_LINE_FILE"
+    exit 1
+fi
+
+bridge_lines=""
+IFS=$'\n'
+
+for line in $(cat "$1")
+do
+    if [ -z "$bridge_lines" ]
+    then
+        bridge_lines="\"$line\""
+    else
+        bridge_lines="${bridge_lines}, \"${line}\""
+    fi
+done
+
+filename=$(mktemp)
+echo "{\"bridge_lines\": [ $bridge_lines ]}" > "$filename"
+
+curl -s -X GET localhost:5000/bridge-state -d "@${filename}" | python -m json.tool
+
+rm -f "$filename"
