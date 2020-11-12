@@ -55,7 +55,7 @@ The service responds with the following JSON:
       {
         "bridge_results": {
           "BRIDGE_LINE_1": {
-            "functional: BOOL,
+            "functional": BOOL,
             "error": "STRING", (only present if "functional" is false)
           },
           ...
