@@ -56,6 +56,7 @@ The service responds with the following JSON:
         "bridge_results": {
           "BRIDGE_LINE_1": {
             "functional": BOOL,
+            "last_tested": "STRING",
             "error": "STRING", (only present if "functional" is false)
           },
           ...
@@ -68,10 +69,12 @@ The service responds with the following JSON:
       }
 
 In a nutshell, the "bridge_results" dictionary maps bridge lines (as they were
-provided in the request) to a dictionary consisting of two keys: "functional"
+provided in the request) to a dictionary consisting of three keys: "functional"
 is set to "true" if tor could fetch the bridge's descriptor.  If tor was unable
 to fetch the bridge's descriptor, "functional" is set to "false" and the
-"error" key maps to an error string.
+"error" key maps to an error string.  The key "last_tested" maps to a string
+representation (in ISO 8601 format) of the UTC time and date the bridge was
+last tested.
 
 In addition to the "bridge_results" dictionary, the response may contain an
 optional "error" key if the entire test failed (e.g. if bridgestrap failed to
@@ -90,10 +93,12 @@ Here are a few examples:
     {
       "bridge_results": {
         "obfs4 1.2.3.4:1234 cert=fJRlJc0T7i2Qkw3SyLQq+M6iTGs9ghLHK65LBy/MQewXJpNOKFq63Om1JHVkLlrmEBbX1w iat-mode=0": {
-          "functional": true
+          "functional": true,
+          "last_tested": "2020-11-12T19:42:16.736853122Z"
         },
         "1.2.3.4:1234": {
           "functional": false,
+          "last_tested": "2020-11-10T09:44:45.877531581Z",
           "error": "timed out waiting for bridge descriptor"
         }
       },
@@ -104,6 +109,7 @@ Here are a few examples:
       "bridge_results": {
         "1.2.3.4:1234 1234567890ABCDEF1234567890ABCDEF12345678": {
           "functional": false,
+          "last_tested": "2020-11-10T09:44:45.877531581Z",
           "error": "timed out waiting for bridge descriptor"
         }
       },

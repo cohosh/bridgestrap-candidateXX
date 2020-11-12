@@ -21,14 +21,14 @@ func TestCacheFunctions(t *testing.T) {
 		t.Errorf("Cache is empty but marks bridge line as existing.")
 	}
 
-	cache.AddEntry(bridgeLine, nil)
+	cache.AddEntry(bridgeLine, nil, time.Now().UTC())
 	e = cache.IsCached(bridgeLine)
 	if e == nil {
 		t.Errorf("Could not retrieve existing element from cache.")
 	}
 
 	testError := fmt.Errorf("bridge is on fire")
-	cache.AddEntry(bridgeLine, testError)
+	cache.AddEntry(bridgeLine, testError, time.Now().UTC())
 	e = cache.IsCached(bridgeLine)
 	if e.Error != testError.Error() {
 		t.Errorf("Got test result %q but expected %q.", e.Error, testError)
@@ -45,7 +45,7 @@ func TestCacheExpiration(t *testing.T) {
 	cache[bridgeLine1] = &CacheEntry{"", expiry}
 
 	bridgeLine2 := "2.2.2.2:2222"
-	cache[bridgeLine2] = &CacheEntry{"", time.Now()}
+	cache[bridgeLine2] = &CacheEntry{"", time.Now().UTC()}
 
 	e := cache.IsCached(bridgeLine1)
 	if e != nil {
@@ -72,7 +72,7 @@ func BenchmarkIsCached(b *testing.B) {
 	numCacheEntries := 10000
 	cache := make(TestCache)
 	for i := 0; i < numCacheEntries; i++ {
-		cache.AddEntry(getRandAddrPort(), getRandError())
+		cache.AddEntry(getRandAddrPort(), getRandError(), time.Now().UTC())
 	}
 
 	// How long does it take to iterate over numCacheEntries cache entries?
@@ -86,8 +86,8 @@ func TestCacheSerialisation(t *testing.T) {
 
 	cache := make(TestCache)
 	testError := fmt.Errorf("foo")
-	cache.AddEntry("1.1.1.1:1", testError)
-	cache.AddEntry("2.2.2.2:2", fmt.Errorf("bar"))
+	cache.AddEntry("1.1.1.1:1", testError, time.Now().UTC())
+	cache.AddEntry("2.2.2.2:2", fmt.Errorf("bar"), time.Now().UTC())
 
 	tmpFh, err := ioutil.TempFile(os.TempDir(), "cache-file-")
 	if err != nil {
@@ -132,7 +132,7 @@ func TestCacheConcurrency(t *testing.T) {
 				byte((i>>16)&0xff),
 				byte((i>>8)&0xff),
 				byte(i&0xff))
-			cache.AddEntry(fmt.Sprintf("%s:1234", ipAddr.String()), nil)
+			cache.AddEntry(fmt.Sprintf("%s:1234", ipAddr.String()), nil, time.Now().UTC())
 		}
 		doneWriting <- true
 	}()

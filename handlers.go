@@ -20,8 +20,9 @@ var FailurePage string
 // BridgeTest represents the result of a bridge test, sent back to the client
 // as JSON object.
 type BridgeTest struct {
-	Functional bool   `json:"functional"`
-	Error      string `json:"error,omitempty"`
+	Functional bool      `json:"functional"`
+	LastTested time.Time `json:"last_tested"`
+	Error      string    `json:"error,omitempty"`
 }
 
 // TestResult represents the result of a test.
@@ -98,8 +99,11 @@ func testBridgeLines(bridgeLines []string) *TestResult {
 	for _, bridgeLine := range bridgeLines {
 		if entry := cache.IsCached(bridgeLine); entry != nil {
 			numCached++
-			result.Bridges[bridgeLine] = &BridgeTest{Functional: entry.Error == "",
-				Error: entry.Error}
+			result.Bridges[bridgeLine] = &BridgeTest{
+				Functional: entry.Error == "",
+				LastTested: entry.Time,
+				Error:      entry.Error,
+			}
 		} else {
 			remainingBridgeLines = append(remainingBridgeLines, bridgeLine)
 		}
@@ -116,7 +120,7 @@ func testBridgeLines(bridgeLines []string) *TestResult {
 
 		// Cache partial test results and add them to our existing result object.
 		for bridgeLine, bridgeTest := range partialResult.Bridges {
-			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error))
+			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error), bridgeTest.LastTested)
 			result.Bridges[bridgeLine] = bridgeTest
 		}
 	} else {
