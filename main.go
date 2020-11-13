@@ -165,9 +165,12 @@ func main() {
 	log.Printf("Starting service on port %s.", addr)
 	go func() {
 		if certFilename != "" && keyFilename != "" {
-			srv.ListenAndServeTLS(certFilename, keyFilename)
+			err = srv.ListenAndServeTLS(certFilename, keyFilename)
 		} else {
-			srv.ListenAndServe()
+			err = srv.ListenAndServe()
+		}
+		if err != http.ErrServerClosed {
+			log.Fatalf("Failed to run Web server: %s", err)
 		}
 	}()
 
