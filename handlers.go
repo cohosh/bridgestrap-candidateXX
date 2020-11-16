@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/time/rate"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 var IndexPage string
@@ -121,6 +122,22 @@ func testBridgeLines(bridgeLines []string) *TestResult {
 	} else {
 		log.Printf("All %d bridge lines served from cache.  No need for testing.", numCached)
 	}
+
+	// Log fraction of bridges that are functional.
+	numFunctional, numDysfunctional := 0, 0
+	for _, bridgeTest := range result.Bridges {
+		if bridgeTest.Functional {
+			numFunctional++
+		} else {
+			numDysfunctional++
+		}
+	}
+	log.Printf("Tested %d bridges: %d (%.1f%%) functional; %d (%.1f%%) dysfunctional.",
+		len(result.Bridges),
+		numFunctional,
+		float64(numFunctional)/float64(len(result.Bridges))*100,
+		numDysfunctional,
+		float64(numDysfunctional)/float64(len(result.Bridges))*100)
 
 	return result
 }
