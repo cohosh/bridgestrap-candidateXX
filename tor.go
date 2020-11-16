@@ -222,6 +222,11 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	for {
 		select {
 		case ev := <-c.eventChan:
+			// Our channel is closed.
+			if ev == nil {
+				result.Error = "test aborted because bridgestrap is shutting down"
+				return result
+			}
 			for _, line := range ev.RawLines {
 				for bridgeLine, parser := range eventParsers {
 					// Skip bridges that are done testing.
