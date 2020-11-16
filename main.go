@@ -16,6 +16,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	// BridgestrapVersion specifies bridgestrap's version.  The version number
+	// is based on semantic versioning: https://semver.org
+	BridgestrapVersion = "0.0.1"
+)
+
 type Route struct {
 	Name        string
 	Method      string
@@ -109,7 +115,7 @@ func main() {
 
 	var err error
 	var addr string
-	var web, printCache, unsafeLogging bool
+	var web, printCache, unsafeLogging, showVersion bool
 	var certFilename, keyFilename string
 	var cacheFile string
 	var templatesDir string
@@ -119,12 +125,18 @@ func main() {
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
 	flag.BoolVar(&printCache, "print-cache", false, "Print the given cache file and exit.")
 	flag.BoolVar(&unsafeLogging, "unsafe", false, "Don't scrub IP addresses in log messages.")
+	flag.BoolVar(&showVersion, "version", false, "Print bridgestrap's version and exit.")
 	flag.StringVar(&certFilename, "cert", "", "TLS certificate file.")
 	flag.StringVar(&keyFilename, "key", "", "TLS private key file.")
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.IntVar(&numSecs, "seconds", 0, "Number of seconds after two subsequent requests are handled.")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("bridgestrap version %s\n", BridgestrapVersion)
+		return
+	}
 
 	var logOutput io.Writer = os.Stderr
 	// Send the log output through our scrubber first.
