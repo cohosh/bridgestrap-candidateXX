@@ -19,7 +19,7 @@ import (
 const (
 	// BridgestrapVersion specifies bridgestrap's version.  The version number
 	// is based on semantic versioning: https://semver.org
-	BridgestrapVersion = "0.0.1"
+	BridgestrapVersion = "0.1.0"
 )
 
 type Route struct {
