@@ -236,10 +236,17 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 					parser.Feed(line)
 					if parser.State == BridgeStateSuccess {
 						log.Printf("Setting %s to 'true'", bridgeLine)
-						result.Bridges[bridgeLine] = &BridgeTest{Functional: true}
+						result.Bridges[bridgeLine] = &BridgeTest{
+							Functional: true,
+							LastTested: time.Now().UTC(),
+						}
 					} else if parser.State == BridgeStateFailure {
 						log.Printf("Setting %s to 'false'", bridgeLine)
-						result.Bridges[bridgeLine] = &BridgeTest{Functional: false, Error: parser.Reason}
+						result.Bridges[bridgeLine] = &BridgeTest{
+							Functional: false,
+							Error:      parser.Reason,
+							LastTested: time.Now().UTC(),
+						}
 					}
 				}
 
@@ -254,8 +261,11 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 			// Mark whatever bridge results we're missing as nonfunctional.
 			for _, bridgeLine := range bridgeLines {
 				if _, exists := result.Bridges[bridgeLine]; !exists {
-					result.Bridges[bridgeLine] = &BridgeTest{Functional: false,
-						Error: "timed out waiting for bridge descriptor"}
+					result.Bridges[bridgeLine] = &BridgeTest{
+						Functional: false,
+						Error:      "timed out waiting for bridge descriptor",
+						LastTested: time.Now().UTC(),
+					}
 				}
 			}
 			return result

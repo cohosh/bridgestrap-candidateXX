@@ -117,8 +117,9 @@ func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 	return r
 }
 
-// AddEntry adds an entry for the given bridge and test result to our cache.
-func (tc *TestCache) AddEntry(bridgeLine string, result error) {
+// AddEntry adds an entry for the given bridge, test result, and test time to
+// our cache.
+func (tc *TestCache) AddEntry(bridgeLine string, result error, lastTested time.Time) {
 
 	addrPort, err := bridgeLineToAddrPort(bridgeLine)
 	if err != nil {
@@ -132,6 +133,6 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error) {
 		errorStr = result.Error()
 	}
 	cacheMutex.Lock()
-	(*tc)[addrPort] = &CacheEntry{errorStr, time.Now()}
+	(*tc)[addrPort] = &CacheEntry{errorStr, lastTested}
 	cacheMutex.Unlock()
 }
