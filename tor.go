@@ -105,6 +105,7 @@ type TorContext struct {
 	DataDir   string
 	Cancel    context.CancelFunc
 	Context   context.Context
+	TorBinary string
 	eventChan chan *bulb.Response
 }
 
@@ -158,7 +159,7 @@ func (c *TorContext) Start() error {
 
 	// Start our Tor process.
 	c.Context, c.Cancel = context.WithCancel(context.Background())
-	cmd := exec.CommandContext(c.Context, "tor", "-f", tmpFh.Name())
+	cmd := exec.CommandContext(c.Context, c.TorBinary, "-f", tmpFh.Name())
 	if err = cmd.Start(); err != nil {
 		return err
 	}
