@@ -120,6 +120,7 @@ func main() {
 	var cacheFile string
 	var templatesDir string
 	var torBinary string
+	var testTimeout int
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
@@ -131,6 +132,7 @@ func main() {
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.StringVar(&torBinary, "tor", "tor", "Path to tor executable.")
+	flag.IntVar(&testTimeout, "timeout", 60, "Test timeout in seconds.")
 	flag.Parse()
 
 	if showVersion {
@@ -165,6 +167,8 @@ func main() {
 		return
 	}
 
+	TorTestTimeout = time.Duration(testTimeout) * time.Second
+	log.Printf("Setting Tor test timeout to %s.", TorTestTimeout)
 	torCtx = &TorContext{TorBinary: torBinary}
 	if err = torCtx.Start(); err != nil {
 		log.Printf("Failed to start Tor process: %s", err)
