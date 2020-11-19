@@ -120,7 +120,6 @@ func main() {
 	var cacheFile string
 	var templatesDir string
 	var torBinary string
-	var numSecs int
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
@@ -132,7 +131,6 @@ func main() {
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.StringVar(&torBinary, "tor", "tor", "Path to tor executable.")
-	flag.IntVar(&numSecs, "seconds", 0, "Number of seconds after two subsequent requests are handled.")
 	flag.Parse()
 
 	if showVersion {
