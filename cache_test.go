@@ -33,6 +33,19 @@ func TestCacheFunctions(t *testing.T) {
 	if e.Error != testError.Error() {
 		t.Errorf("Got test result %q but expected %q.", e.Error, testError)
 	}
+
+	// A bogus bridge line shouldn't make it into the cache.
+	cache = make(TestCache)
+	bogusBridgeLine := "bogus-bridge-line"
+	cache.AddEntry(bogusBridgeLine, errors.New("bogus-error"), time.Now().UTC())
+	if len(cache) != 0 {
+		t.Errorf("Bogus bridge line made it into cache.")
+	}
+
+	e = cache.IsCached(bogusBridgeLine)
+	if e != nil {
+		t.Errorf("Got non-nil cache entry for bogus bridge line.")
+	}
 }
 
 func TestCacheExpiration(t *testing.T) {
@@ -114,6 +127,14 @@ func TestCacheSerialisation(t *testing.T) {
 	}
 	if e1.Error != testError.Error() {
 		t.Errorf("Error string expected to be %q but is %q.", testError, e1.Error)
+	}
+
+	// Test errors when reading/writing bogus files.
+	if err = cache.ReadFromDisk("/f/o/o/b/a/r"); err == nil {
+		t.Errorf("Failed to return error when reading bogus file.")
+	}
+	if err = cache.WriteToDisk("/f/o/o/b/a/r"); err == nil {
+		t.Errorf("Failed to return error when writing bogus file.")
 	}
 }
 

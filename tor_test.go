@@ -45,3 +45,35 @@ func TestGetBridgeIdentifier(t *testing.T) {
 		t.Errorf("failed to extract bridge identifier")
 	}
 }
+
+func TestBridgeTest(t *testing.T) {
+
+	// Taken from:
+	// https://gitlab.torproject.org/tpo/anti-censorship/team/-/wikis/Default-Bridges
+	defaultBridge1 := "obfs4 192.95.36.142:443 cert=qUVQ0srL1JI/vO6V6m/24anYXiJD3QP2HgzUKQtQ7GRqqUvs7P+tG43RtAqdhLOALP7DJQ iat-mode=1"
+	defaultBridge2 := "obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=4TLQPJrTSaDffMK7Nbao6LC7G9OW/NHkUwIdjLSS3KYf0Nv4/nQiiI8dY2TcsQx01NniOg iat-mode=0"
+	bogusBridge := "127.0.0.1:1"
+
+	torCtx = &TorContext{TorBinary: "tor"}
+	if err := torCtx.Start(); err != nil {
+		t.Fatalf("Failed to start tor: %s", err)
+	}
+
+	result := torCtx.TestBridgeLines([]string{defaultBridge1, defaultBridge2, bogusBridge})
+	r, _ := result.Bridges[defaultBridge1]
+	if !r.Functional {
+		t.Errorf("Default bridge #1 deemed non-functional.")
+	}
+	r, _ = result.Bridges[defaultBridge2]
+	if !r.Functional {
+		t.Errorf("Default bridge #2 deemed non-functional.")
+	}
+	r, _ = result.Bridges[bogusBridge]
+	if r.Functional {
+		t.Errorf("Bogus bridge deemed functional.")
+	}
+
+	if err := torCtx.Stop(); err != nil {
+		t.Fatalf("Failed to stop tor: %s", err)
+	}
+}
