@@ -121,6 +121,7 @@ func main() {
 	var templatesDir string
 	var torBinary string
 	var testTimeout int
+	var logFile string
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
 	flag.BoolVar(&web, "web", false, "Enable the web interface (in addition to the JSON API).")
@@ -132,6 +133,7 @@ func main() {
 	flag.StringVar(&cacheFile, "cache", "bridgestrap-cache.bin", "Cache file that contains test results.")
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.StringVar(&torBinary, "tor", "tor", "Path to tor executable.")
+	flag.StringVar(&logFile, "log", "", "File to write logs to.")
 	flag.IntVar(&testTimeout, "timeout", 60, "Test timeout in seconds.")
 	flag.Parse()
 
@@ -141,6 +143,16 @@ func main() {
 	}
 
 	var logOutput io.Writer = os.Stderr
+	if logFile != "" {
+		logFd, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+		logOutput = logFd
+		log.SetOutput(logOutput)
+		defer logFd.Close()
+	}
+
 	// Send the log output through our scrubber first.
 	if !printCache && !unsafeLogging {
 		log.SetOutput(&safelog.LogScrubber{Output: logOutput})
