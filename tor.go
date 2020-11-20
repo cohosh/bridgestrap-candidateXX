@@ -61,7 +61,7 @@ func writeConfigToTorrc(tmpFh io.Writer, dataDir string) error {
 		"ControlPort unix:%s\n"+
 		"SocksPort auto\n"+
 		"SafeLogging 0\n"+
-		"Log info file %s/tor.log\n"+
+		"Log notice file %s/tor.log\n"+
 		"DataDirectory %s\n"+
 		"ClientTransportPlugin obfs2,obfs3,obfs4,scramblesuit exec /usr/bin/obfs4proxy\n"+
 		"Bridge %s\n"+
