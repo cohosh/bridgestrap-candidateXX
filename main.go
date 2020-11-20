@@ -173,6 +173,11 @@ func main() {
 			})
 	}
 
+	cache = &TestCache{
+		Entries:      make(map[string]*CacheEntry),
+		EntryTimeout: time.Duration(cacheTimeout) * time.Hour,
+	}
+	log.Printf("Setting cache timeout to %s.", cache.EntryTimeout)
 	if err = cache.ReadFromDisk(cacheFile); err != nil {
 		log.Printf("Could not read cache: %s", err)
 	}
@@ -180,12 +185,6 @@ func main() {
 		printPrettyCache()
 		return
 	}
-
-	cache = &TestCache{
-		Entries:      make(map[string]*CacheEntry),
-		EntryTimeout: time.Duration(cacheTimeout) * time.Hour,
-	}
-	log.Printf("Setting cache timeout to %s.", cache.EntryTimeout)
 
 	TorTestTimeout = time.Duration(testTimeout) * time.Second
 	log.Printf("Setting Tor test timeout to %s.", TorTestTimeout)
