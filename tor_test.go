@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestWriteConfigToTorrc(t *testing.T) {
@@ -54,6 +55,7 @@ func TestBridgeTest(t *testing.T) {
 	defaultBridge2 := "obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=4TLQPJrTSaDffMK7Nbao6LC7G9OW/NHkUwIdjLSS3KYf0Nv4/nQiiI8dY2TcsQx01NniOg iat-mode=0"
 	bogusBridge := "127.0.0.1:1"
 
+	TorTestTimeout = time.Minute
 	torCtx = &TorContext{TorBinary: "tor"}
 	if err := torCtx.Start(); err != nil {
 		t.Fatalf("Failed to start tor: %s", err)
