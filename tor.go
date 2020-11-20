@@ -102,12 +102,14 @@ func makeControlConnection(domainSocket string) (*bulb.Conn, error) {
 // Tor process.
 type TorContext struct {
 	sync.Mutex
-	Ctrl      *bulb.Conn
-	DataDir   string
-	Cancel    context.CancelFunc
-	Context   context.Context
-	TorBinary string
-	eventChan chan *bulb.Response
+	Ctrl         *bulb.Conn
+	DataDir      string
+	Cancel       context.CancelFunc
+	Context      context.Context
+	RequestQueue chan *TestRequest
+	TorBinary    string
+	eventChan    chan *bulb.Response
+	shutdown     chan bool
 }
 
 // Stop stops the Tor process.  Errors during cleanup are logged and the last
@@ -117,6 +119,7 @@ func (c *TorContext) Stop() error {
 	defer c.Unlock()
 
 	var err error
+	close(c.shutdown)
 	log.Println("Stopping Tor process.")
 	c.Cancel()
 
@@ -139,6 +142,8 @@ func (c *TorContext) Start() error {
 	log.Println("Starting Tor process.")
 
 	c.eventChan = make(chan *bulb.Response, 100)
+	c.RequestQueue = make(chan *TestRequest, 100)
+	c.shutdown = make(chan bool)
 
 	// Create Tor's data directory.
 	var err error
@@ -173,6 +178,7 @@ func (c *TorContext) Start() error {
 	}
 	c.Ctrl.StartAsyncReader()
 	go c.eventReader()
+	go c.dispatcher()
 
 	if _, err := c.Ctrl.Request("SETEVENTS ORCONN NEWDESC"); err != nil {
 		return err
@@ -275,6 +281,28 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	}
 
 	return result
+}
+
+// dispatcher reads new bridge test requests, triggers the test, and writes the
+// result to the given channel.
+func (c *TorContext) dispatcher() {
+	log.Printf("Starting request dispatcher.")
+	defer log.Printf("Stopping request dispatcher.")
+	for {
+		select {
+		case req := <-c.RequestQueue:
+			log.Printf("%d pending test requests.", len(c.RequestQueue))
+
+			start := time.Now()
+			result := c.TestBridgeLines(req.BridgeLines)
+			elapsed := time.Since(start)
+			metrics.TorTestTime.Observe(elapsed.Seconds())
+
+			req.resultChan <- result
+		case <-c.shutdown:
+			return
+		}
+	}
 }
 
 // eventReader reads events from Tor's control port and writes them to

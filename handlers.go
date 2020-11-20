@@ -35,6 +35,7 @@ type TestResult struct {
 // TestRequest represents a client's request to test a batch of bridges.
 type TestRequest struct {
 	BridgeLines []string `json:"bridge_lines"`
+	resultChan  chan *TestResult
 }
 
 // limiter implements a rate limiter.  We allow 1 request per second on average
@@ -90,13 +91,13 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	SendHtmlResponse(w, IndexPage)
 }
 
-func testBridgeLines(bridgeLines []string) *TestResult {
+func testBridgeLines(req *TestRequest) *TestResult {
 
 	// Add cached bridge lines to the result.
 	result := NewTestResult()
 	remainingBridgeLines := []string{}
 	numCached := 0
-	for _, bridgeLine := range bridgeLines {
+	for _, bridgeLine := range req.BridgeLines {
 		if entry := cache.IsCached(bridgeLine); entry != nil {
 			numCached++
 			result.Bridges[bridgeLine] = &BridgeTest{
@@ -115,7 +116,9 @@ func testBridgeLines(bridgeLines []string) *TestResult {
 			numCached, len(remainingBridgeLines))
 
 		start := time.Now()
-		partialResult := torCtx.TestBridgeLines(remainingBridgeLines)
+		req.resultChan = make(chan *TestResult)
+		torCtx.RequestQueue <- req
+		partialResult := <-req.resultChan
 		result.Time = float64(time.Now().Sub(start).Seconds())
 		result.Error = partialResult.Error
 
@@ -177,7 +180,7 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Got %d bridge lines from %s.", len(req.BridgeLines), r.RemoteAddr)
-	result := testBridgeLines(req.BridgeLines)
+	result := testBridgeLines(req)
 
 	jsonResult, err := json.Marshal(result)
 	if err != nil {
@@ -203,7 +206,7 @@ func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := testBridgeLines([]string{bridgeLine})
+	result := testBridgeLines(&TestRequest{BridgeLines: []string{bridgeLine}})
 	bridgeResult, exists := result.Bridges[bridgeLine]
 	if !exists {
 		log.Printf("Bug: Test result not part of our result map.")
