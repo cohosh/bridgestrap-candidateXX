@@ -117,6 +117,7 @@ func testBridgeLines(bridgeLines []string) *TestResult {
 		start := time.Now()
 		partialResult := torCtx.TestBridgeLines(remainingBridgeLines)
 		result.Time = float64(time.Now().Sub(start).Seconds())
+		result.Error = partialResult.Error
 
 		// Cache partial test results and add them to our existing result object.
 		for bridgeLine, bridgeTest := range partialResult.Bridges {
