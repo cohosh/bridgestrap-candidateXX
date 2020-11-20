@@ -47,6 +47,24 @@ func bridgeLineToAddrPort(bridgeLine string) (string, error) {
 	}
 }
 
+// FracFunctional returns the fraction of bridges currently in the cache that
+// are functional.
+func (tc *TestCache) FracFunctional() float64 {
+
+	if len((*tc).Entries) == 0 {
+		return 0
+	}
+
+	numFunctional := 0
+	for _, entry := range (*tc).Entries {
+		if entry.Error == "" {
+			numFunctional++
+		}
+	}
+
+	return float64(numFunctional) / float64(len((*tc).Entries))
+}
+
 // WriteToDisk writes our test result cache to disk, allowing it to persist
 // across program restarts.
 func (tc *TestCache) WriteToDisk(cacheFile string) error {
@@ -134,4 +152,6 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error, lastTested time.T
 	tc.l.Lock()
 	(*tc).Entries[addrPort] = &CacheEntry{errorStr, lastTested}
 	tc.l.Unlock()
+
+	metrics.FracFunctional.Set((*tc).FracFunctional())
 }

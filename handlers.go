@@ -100,12 +100,14 @@ func testBridgeLines(req *TestRequest) *TestResult {
 	for _, bridgeLine := range req.BridgeLines {
 		if entry := cache.IsCached(bridgeLine); entry != nil {
 			numCached++
+			metrics.CacheHits.Inc()
 			result.Bridges[bridgeLine] = &BridgeTest{
 				Functional: entry.Error == "",
 				LastTested: entry.Time,
 				Error:      entry.Error,
 			}
 		} else {
+			metrics.CacheMisses.Inc()
 			remainingBridgeLines = append(remainingBridgeLines, bridgeLine)
 		}
 	}
@@ -125,6 +127,11 @@ func testBridgeLines(req *TestRequest) *TestResult {
 		// Cache partial test results and add them to our existing result object.
 		for bridgeLine, bridgeTest := range partialResult.Bridges {
 			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error), bridgeTest.LastTested)
+			if bridgeTest.Functional {
+				metrics.NumFunctionalBridges.Inc()
+			} else {
+				metrics.NumDysfunctionalBridges.Inc()
+			}
 			result.Bridges[bridgeLine] = bridgeTest
 		}
 	} else {
@@ -147,11 +154,14 @@ func testBridgeLines(req *TestRequest) *TestResult {
 		numDysfunctional,
 		float64(numDysfunctional)/float64(len(result.Bridges))*100)
 
+	metrics.CacheSize.Set(float64(len(cache.Entries)))
+
 	return result
 }
 
 func BridgeState(w http.ResponseWriter, r *http.Request) {
 
+	metrics.ApiNumRequests.Inc()
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
@@ -173,6 +183,7 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metrics.ApiNumValidRequests.Inc()
 	if len(req.BridgeLines) > MaxBridgesPerReq {
 		log.Printf("Got %d bridges in request but we only allow <= %d.", len(req.BridgeLines), MaxBridgesPerReq)
 		http.Error(w, fmt.Sprintf("maximum of %d bridge lines allowed", MaxBridgesPerReq), http.StatusBadRequest)
@@ -193,6 +204,7 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 
 func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 
+	metrics.WebNumRequests.Inc()
 	r.ParseForm()
 	// Rate-limit Web requests to prevent someone from abusing this service
 	// as a port scanner.
@@ -206,6 +218,7 @@ func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metrics.WebNumValidRequests.Inc()
 	result := testBridgeLines(&TestRequest{BridgeLines: []string{bridgeLine}})
 	bridgeResult, exists := result.Bridges[bridgeLine]
 	if !exists {

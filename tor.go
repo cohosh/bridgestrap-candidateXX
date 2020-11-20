@@ -292,6 +292,7 @@ func (c *TorContext) dispatcher() {
 		select {
 		case req := <-c.RequestQueue:
 			log.Printf("%d pending test requests.", len(c.RequestQueue))
+			metrics.PendingReqs.Set(float64(len(c.RequestQueue)))
 
 			start := time.Now()
 			result := c.TestBridgeLines(req.BridgeLines)
