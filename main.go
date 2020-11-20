@@ -94,7 +94,7 @@ func printPrettyCache() {
 	var shortError string
 	var numFunctional int
 
-	for bridgeLine, cacheEntry := range cache {
+	for bridgeLine, cacheEntry := range cache.Entries {
 		shortError = cacheEntry.Error
 		maxChars := 50
 		if len(cacheEntry.Error) > maxChars {
@@ -105,9 +105,10 @@ func printPrettyCache() {
 		}
 		fmt.Printf("%-22s %-50s %s\n", bridgeLine, shortError, cacheEntry.Time)
 	}
-	if len(cache) > 0 {
+	cacheLen := len(cache.Entries)
+	if len(cache.Entries) > 0 {
 		log.Printf("Found %d (%.2f%%) out of %d functional.\n", numFunctional,
-			float64(numFunctional)/float64(len(cache))*100.0, len(cache))
+			float64(numFunctional)/float64(cacheLen)*100.0, cacheLen)
 	}
 }
 
@@ -120,7 +121,7 @@ func main() {
 	var cacheFile string
 	var templatesDir string
 	var torBinary string
-	var testTimeout int
+	var testTimeout, cacheTimeout int
 	var logFile string
 
 	flag.StringVar(&addr, "addr", ":5000", "Address to listen on.")
@@ -134,7 +135,8 @@ func main() {
 	flag.StringVar(&templatesDir, "templates", "templates", "Path to directory that contains our web templates.")
 	flag.StringVar(&torBinary, "tor", "tor", "Path to tor executable.")
 	flag.StringVar(&logFile, "log", "", "File to write logs to.")
-	flag.IntVar(&testTimeout, "timeout", 60, "Test timeout in seconds.")
+	flag.IntVar(&testTimeout, "test-timeout", 60, "Test timeout in seconds.")
+	flag.IntVar(&cacheTimeout, "cache-timeout", 24, "Cache timeout in hours.")
 	flag.Parse()
 
 	if showVersion {
@@ -178,6 +180,12 @@ func main() {
 		printPrettyCache()
 		return
 	}
+
+	cache = &TestCache{
+		Entries:      make(map[string]*CacheEntry),
+		EntryTimeout: time.Duration(cacheTimeout) * time.Hour,
+	}
+	log.Printf("Setting cache timeout to %s.", cache.EntryTimeout)
 
 	TorTestTimeout = time.Duration(testTimeout) * time.Second
 	log.Printf("Setting Tor test timeout to %s.", TorTestTimeout)

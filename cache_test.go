@@ -11,9 +11,16 @@ import (
 	"time"
 )
 
+func NewCache() *TestCache {
+	return &TestCache{
+		Entries:      make(map[string]*CacheEntry),
+		EntryTimeout: 24 * time.Hour,
+	}
+}
+
 func TestCacheFunctions(t *testing.T) {
 
-	cache := make(TestCache)
+	cache := NewCache()
 	bridgeLine := "obfs4 127.0.0.1:1 cert=foo iat-mode=0"
 
 	e := cache.IsCached(bridgeLine)
@@ -35,10 +42,10 @@ func TestCacheFunctions(t *testing.T) {
 	}
 
 	// A bogus bridge line shouldn't make it into the cache.
-	cache = make(TestCache)
+	cache = NewCache()
 	bogusBridgeLine := "bogus-bridge-line"
 	cache.AddEntry(bogusBridgeLine, errors.New("bogus-error"), time.Now().UTC())
-	if len(cache) != 0 {
+	if len(cache.Entries) != 0 {
 		t.Errorf("Bogus bridge line made it into cache.")
 	}
 
@@ -50,15 +57,15 @@ func TestCacheFunctions(t *testing.T) {
 
 func TestCacheExpiration(t *testing.T) {
 
-	cache := make(TestCache)
+	cache := NewCache()
 
 	const shortForm = "2006-Jan-02"
 	expiry, _ := time.Parse(shortForm, "2000-Jan-01")
 	bridgeLine1 := "1.1.1.1:1111"
-	cache[bridgeLine1] = &CacheEntry{"", expiry}
+	cache.Entries[bridgeLine1] = &CacheEntry{"", expiry}
 
 	bridgeLine2 := "2.2.2.2:2222"
-	cache[bridgeLine2] = &CacheEntry{"", time.Now().UTC()}
+	cache.Entries[bridgeLine2] = &CacheEntry{"", time.Now().UTC()}
 
 	e := cache.IsCached(bridgeLine1)
 	if e != nil {
@@ -83,7 +90,7 @@ func BenchmarkIsCached(b *testing.B) {
 	}
 
 	numCacheEntries := 10000
-	cache := make(TestCache)
+	cache := NewCache()
 	for i := 0; i < numCacheEntries; i++ {
 		cache.AddEntry(getRandAddrPort(), getRandError(), time.Now().UTC())
 	}
@@ -97,7 +104,7 @@ func BenchmarkIsCached(b *testing.B) {
 
 func TestCacheSerialisation(t *testing.T) {
 
-	cache := make(TestCache)
+	cache := NewCache()
 	testError := fmt.Errorf("foo")
 	cache.AddEntry("1.1.1.1:1", testError, time.Now().UTC())
 	cache.AddEntry("2.2.2.2:2", fmt.Errorf("bar"), time.Now().UTC())
@@ -117,8 +124,8 @@ func TestCacheSerialisation(t *testing.T) {
 		t.Errorf("Failed to read cache from disk: %s", err)
 	}
 
-	if len(cache) != 2 {
-		t.Errorf("Cache supposed to contain but two elements but has %d.", len(cache))
+	if len(cache.Entries) != 2 {
+		t.Errorf("Cache supposed to contain but two elements but has %d.", len(cache.Entries))
 	}
 
 	e1 := cache.IsCached("1.1.1.1:1")
@@ -140,7 +147,7 @@ func TestCacheSerialisation(t *testing.T) {
 
 func TestCacheConcurrency(t *testing.T) {
 
-	cache := make(TestCache)
+	cache := NewCache()
 	max := 10000
 	doneReading := make(chan bool)
 	doneWriting := make(chan bool)

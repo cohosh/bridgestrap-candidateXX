@@ -10,13 +10,7 @@ import (
 	"time"
 )
 
-const (
-	// Cache test results for one week.
-	CacheValidity = 7 * 24 * time.Hour
-)
-
-var cacheMutex sync.Mutex
-var cache TestCache = make(TestCache)
+var cache *TestCache
 
 // Regular expression that captures the address:port part of a bridge line (for
 // both IPv4 and IPv6 addresses).
@@ -33,6 +27,14 @@ type CacheEntry struct {
 	Time  time.Time
 }
 
+type TestCache struct {
+	// Entries maps a bridge's addr:port tuple to a cache entry.
+	Entries map[string]*CacheEntry
+	// EntryTimeout determines how long a cache entry is valid for.
+	EntryTimeout time.Duration
+	l            sync.Mutex
+}
+
 // bridgeLineToAddrPort takes a bridge line as input and returns a string
 // consisting of the bridge's addr:port (for both IPv4 and IPv6 addresses).
 func bridgeLineToAddrPort(bridgeLine string) (string, error) {
@@ -45,9 +47,6 @@ func bridgeLineToAddrPort(bridgeLine string) (string, error) {
 	}
 }
 
-// TestCache maps a bridge's addr:port tuple to a cache entry.
-type TestCache map[string]*CacheEntry
-
 // WriteToDisk writes our test result cache to disk, allowing it to persist
 // across program restarts.
 func (tc *TestCache) WriteToDisk(cacheFile string) error {
@@ -59,13 +58,13 @@ func (tc *TestCache) WriteToDisk(cacheFile string) error {
 	defer fh.Close()
 
 	enc := gob.NewEncoder(fh)
-	cacheMutex.Lock()
+	tc.l.Lock()
 	err = enc.Encode(*tc)
 	if err == nil {
 		log.Printf("Wrote cache with %d elements to %q.",
-			len(*tc), cacheFile)
+			len((*tc).Entries), cacheFile)
 	}
-	cacheMutex.Unlock()
+	tc.l.Unlock()
 
 	return err
 }
@@ -80,39 +79,39 @@ func (tc *TestCache) ReadFromDisk(cacheFile string) error {
 	defer fh.Close()
 
 	dec := gob.NewDecoder(fh)
-	cacheMutex.Lock()
+	tc.l.Lock()
 	err = dec.Decode(tc)
 	if err == nil {
 		log.Printf("Read cache with %d elements from %q.",
-			len(*tc), cacheFile)
+			len((*tc).Entries), cacheFile)
 	}
-	cacheMutex.Unlock()
+	tc.l.Unlock()
 
 	return err
 }
 
 // IsCached returns a cache entry if the given bridge line has been tested
-// recently (as determined by CacheValidity), and nil otherwise.
+// recently (as determined by EntryTimeout), and nil otherwise.
 func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 
 	// First, prune expired cache entries.
 	now := time.Now().UTC()
-	cacheMutex.Lock()
-	for index, entry := range *tc {
-		if entry.Time.Before(now.Add(-CacheValidity)) {
-			delete(*tc, index)
+	tc.l.Lock()
+	for index, entry := range (*tc).Entries {
+		if entry.Time.Before(now.Add(-(*tc).EntryTimeout)) {
+			delete((*tc).Entries, index)
 		}
 	}
-	cacheMutex.Unlock()
+	tc.l.Unlock()
 
 	addrPort, err := bridgeLineToAddrPort(bridgeLine)
 	if err != nil {
 		return nil
 	}
 
-	cacheMutex.Lock()
-	var r *CacheEntry = (*tc)[addrPort]
-	cacheMutex.Unlock()
+	tc.l.Lock()
+	var r *CacheEntry = (*tc).Entries[addrPort]
+	tc.l.Unlock()
 
 	return r
 }
@@ -132,7 +131,7 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error, lastTested time.T
 	} else {
 		errorStr = result.Error()
 	}
-	cacheMutex.Lock()
-	(*tc)[addrPort] = &CacheEntry{errorStr, lastTested}
-	cacheMutex.Unlock()
+	tc.l.Lock()
+	(*tc).Entries[addrPort] = &CacheEntry{errorStr, lastTested}
+	tc.l.Unlock()
 }
