@@ -14,7 +14,7 @@ func TestWriteConfigToTorrc(t *testing.T) {
 ControlPort unix:/foo/control-socket
 SocksPort auto
 SafeLogging 0
-Log info file /foo/tor.log
+Log notice file /foo/tor.log
 DataDirectory /foo
 ClientTransportPlugin obfs2,obfs3,obfs4,scramblesuit exec /usr/bin/obfs4proxy
 Bridge obfs4 192.95.36.142:443 CDF2E852BF539B82BD10E27E9115A31734E378C2 cert=qUVQ0srL1JI/vO6V6m/24anYXiJD3QP2HgzUKQtQ7GRqqUvs7P+tG43RtAqdhLOALP7DJQ iat-mode=1

@@ -14,12 +14,13 @@ import (
 
 	"git.torproject.org/pluggable-transports/snowflake.git/common/safelog"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
 	// BridgestrapVersion specifies bridgestrap's version.  The version number
 	// is based on semantic versioning: https://semver.org
-	BridgestrapVersion = "0.2.0"
+	BridgestrapVersion = "0.3.0"
 )
 
 type Route struct {
@@ -86,6 +87,7 @@ func NewRouter() *mux.Router {
 			Name(route.Name).
 			Handler(handler)
 	}
+	router.Path("/metrics").Handler(promhttp.Handler())
 
 	return router
 }
@@ -193,6 +195,9 @@ func main() {
 		log.Printf("Failed to start Tor process: %s", err)
 		return
 	}
+
+	log.Printf("Initialising Prometheus metrics.")
+	InitMetrics()
 
 	var srv http.Server
 	srv.Addr = addr

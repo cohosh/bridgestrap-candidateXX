@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+func init() {
+	InitMetrics()
+}
+
 func NewCache() *TestCache {
 	return &TestCache{
 		Entries:      make(map[string]*CacheEntry),
@@ -52,6 +56,21 @@ func TestCacheFunctions(t *testing.T) {
 	e = cache.IsCached(bogusBridgeLine)
 	if e != nil {
 		t.Errorf("Got non-nil cache entry for bogus bridge line.")
+	}
+}
+
+func TestCacheFracFunctional(t *testing.T) {
+
+	cache := NewCache()
+
+	cache.AddEntry("1.1.1.1:1", nil, time.Now().UTC())
+	cache.AddEntry("2.2.2.2:2", nil, time.Now().UTC())
+	cache.AddEntry("3.3.3.3:3", nil, time.Now().UTC())
+	cache.AddEntry("4.4.4.4:4", errors.New("error"), time.Now().UTC())
+
+	expected := 0.75
+	if cache.FracFunctional() != expected {
+		t.Errorf("Expected fraction %.2f but got %.2f.", expected, cache.FracFunctional())
 	}
 }
 
