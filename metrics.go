@@ -109,7 +109,7 @@ func InitMetrics() {
 	for i := 0.5; i < TorTestTimeout.Seconds(); i *= 2 {
 		buckets = append(buckets, i)
 	}
-	buckets = append(buckets, TorTestTimeout.Seconds())
+	buckets = append(buckets, TorTestTimeout.Seconds()+1)
 
 	metrics.TorTestTime = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace: PrometheusNamespace,
