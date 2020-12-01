@@ -10,6 +10,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
 )
 
@@ -99,14 +100,14 @@ func testBridgeLines(req *TestRequest) *TestResult {
 	for _, bridgeLine := range req.BridgeLines {
 		if entry := cache.IsCached(bridgeLine); entry != nil {
 			numCached++
-			metrics.CacheHits.Inc()
+			metrics.Cache.With(prometheus.Labels{"type": "hit"}).Inc()
 			result.Bridges[bridgeLine] = &BridgeTest{
 				Functional: entry.Error == "",
 				LastTested: entry.Time,
 				Error:      entry.Error,
 			}
 		} else {
-			metrics.CacheMisses.Inc()
+			metrics.Cache.With(prometheus.Labels{"type": "miss"}).Inc()
 			remainingBridgeLines = append(remainingBridgeLines, bridgeLine)
 		}
 	}
@@ -127,9 +128,9 @@ func testBridgeLines(req *TestRequest) *TestResult {
 		for bridgeLine, bridgeTest := range partialResult.Bridges {
 			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error), bridgeTest.LastTested)
 			if bridgeTest.Functional {
-				metrics.NumFunctionalBridges.Inc()
+				metrics.BridgeStatus.With(prometheus.Labels{"status": "functional"}).Inc()
 			} else {
-				metrics.NumDysfunctionalBridges.Inc()
+				metrics.BridgeStatus.With(prometheus.Labels{"status": "dysfunctional"}).Inc()
 			}
 			result.Bridges[bridgeLine] = bridgeTest
 		}
@@ -160,7 +161,11 @@ func testBridgeLines(req *TestRequest) *TestResult {
 
 func BridgeState(w http.ResponseWriter, r *http.Request) {
 
-	metrics.ApiNumRequests.Inc()
+	reqStatus := "invalid"
+	defer func() {
+		metrics.Requests.With(prometheus.Labels{"type": "api", "status": reqStatus}).Inc()
+	}()
+
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
@@ -181,8 +186,8 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no bridge lines given", http.StatusBadRequest)
 		return
 	}
+	reqStatus = "valid"
 
-	metrics.ApiNumValidRequests.Inc()
 	if len(req.BridgeLines) > MaxBridgesPerReq {
 		log.Printf("Got %d bridges in request but we only allow <= %d.", len(req.BridgeLines), MaxBridgesPerReq)
 		http.Error(w, fmt.Sprintf("maximum of %d bridge lines allowed", MaxBridgesPerReq), http.StatusBadRequest)
@@ -203,7 +208,11 @@ func BridgeState(w http.ResponseWriter, r *http.Request) {
 
 func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 
-	metrics.WebNumRequests.Inc()
+	reqStatus := "invalid"
+	defer func() {
+		metrics.Requests.With(prometheus.Labels{"type": "web", "status": reqStatus}).Inc()
+	}()
+
 	r.ParseForm()
 	// Rate-limit Web requests to prevent someone from abusing this service
 	// as a port scanner.
@@ -216,8 +225,8 @@ func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 		SendHtmlResponse(w, "No bridge line given.")
 		return
 	}
+	reqStatus = "valid"
 
-	metrics.WebNumValidRequests.Inc()
 	result := testBridgeLines(&TestRequest{BridgeLines: []string{bridgeLine}})
 	bridgeResult, exists := result.Bridges[bridgeLine]
 	if !exists {
