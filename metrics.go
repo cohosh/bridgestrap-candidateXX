@@ -10,19 +10,14 @@ const (
 )
 
 type Metrics struct {
-	OrconnLaunched          prometheus.Counter
-	CacheHits               prometheus.Counter
-	CacheMisses             prometheus.Counter
-	CacheSize               prometheus.Gauge
-	PendingReqs             prometheus.Gauge
-	FracFunctional          prometheus.Gauge
-	ApiNumRequests          prometheus.Counter
-	ApiNumValidRequests     prometheus.Counter
-	WebNumRequests          prometheus.Counter
-	WebNumValidRequests     prometheus.Counter
-	NumFunctionalBridges    prometheus.Counter
-	NumDysfunctionalBridges prometheus.Counter
-	TorTestTime             prometheus.Histogram
+	OrconnLaunched prometheus.Counter
+	CacheSize      prometheus.Gauge
+	PendingReqs    prometheus.Gauge
+	FracFunctional prometheus.Gauge
+	TorTestTime    prometheus.Histogram
+	Cache          *prometheus.CounterVec
+	Requests       *prometheus.CounterVec
+	BridgeStatus   *prometheus.CounterVec
 }
 
 var metrics *Metrics
@@ -50,59 +45,38 @@ func InitMetrics() {
 		Help:      "The fraction of functional bridges currently in the cache",
 	})
 
-	metrics.CacheHits = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "cache_hits",
-		Help:      "The number of requests that hit the cache",
-	})
-
-	metrics.CacheMisses = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "cache_misses",
-		Help:      "The number of requests that missed the cache",
-	})
-
 	metrics.CacheSize = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: PrometheusNamespace,
 		Name:      "cache_size",
 		Help:      "The number of cached elements",
 	})
 
-	metrics.ApiNumRequests = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "api_num_requests",
-		Help:      "The number of API requests",
-	})
+	metrics.Cache = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: PrometheusNamespace,
+			Name:      "cache_total",
+			Help:      "The number of cache hits and misses",
+		},
+		[]string{"type"},
+	)
 
-	metrics.ApiNumValidRequests = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "api_num_validrequests",
-		Help:      "The number of valid API requests",
-	})
+	metrics.Requests = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: PrometheusNamespace,
+			Name:      "requests_total",
+			Help:      "The type and status of requests",
+		},
+		[]string{"type", "status"},
+	)
 
-	metrics.WebNumRequests = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "web_num_requests",
-		Help:      "The number of Web requests",
-	})
-
-	metrics.WebNumValidRequests = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "web_num_valid_requests",
-		Help:      "The number of valid Web requests",
-	})
-
-	metrics.NumFunctionalBridges = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "num_functional_bridges",
-		Help:      "The number of functional bridges",
-	})
-
-	metrics.NumDysfunctionalBridges = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "num_dysfunctional_bridges",
-		Help:      "The number of dysfunctional bridges",
-	})
+	metrics.BridgeStatus = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: PrometheusNamespace,
+			Name:      "bridge_status_total",
+			Help:      "The number of functional and dysfunctional bridges",
+		},
+		[]string{"status"},
+	)
 
 	buckets := []float64{}
 	TorTestTimeout.Seconds()
