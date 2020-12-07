@@ -3,27 +3,47 @@
 # Test a batch of bridge lines by running:
 #   ./test-bridge-lines /path/to/file
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 BRIDGE_LINE_FILE"
+if [ "$#" -ne 1 ] && [ "$#" -ne 2 ]
+then
+    echo "Usage: $0 BRIDGE_LINE_FILE [LINES_PER_TEST]"
     exit 1
 fi
 
-bridge_lines=""
+# By default, we're testing 25 bridge lines at a time.
+if [ "$#" -eq 2 ]
+then
+    lines_per_test="$2"
+else
+    lines_per_test=25
+fi
+
 IFS=$'\n'
+num_bridges=$(wc -l "$1" | cut -d ' ' -f 1)
 
-for line in $(cat "$1")
+# Iterate over our bridge lines, in chunks of $lines_per_test.
+for i in $(seq 1 "$lines_per_test" "$num_bridges")
 do
-    if [ -z "$bridge_lines" ]
-    then
-        bridge_lines="\"$line\""
-    else
-        bridge_lines="${bridge_lines}, \"${line}\""
-    fi
+    inc=$(( $lines_per_test < $num_bridges ? $lines_per_test : $num_bridges ))
+    j=$((i + $inc - 1))
+    bridge_lines=""
+
+    for line in $(sed -n "${i},${j}p" "$1")
+    do
+        if [ -z "$bridge_lines" ]
+        then
+            bridge_lines="\"$line\""
+        else
+            bridge_lines="${bridge_lines}, \"${line}\""
+        fi
+    done
+
+    tmp_file=$(mktemp)
+    echo "{\"bridge_lines\": [ $bridge_lines ]}" > "$tmp_file"
+
+    # cat "$tmp_file"
+
+    curl -s -X GET localhost:5000/bridge-state -d "@${tmp_file}" | python -m json.tool
+
+    rm -f "$tmp_file"
+
 done
-
-filename=$(mktemp)
-echo "{\"bridge_lines\": [ $bridge_lines ]}" > "$filename"
-
-curl -s -X GET localhost:5000/bridge-state -d "@${filename}" | python -m json.tool
-
-rm -f "$filename"
