@@ -200,6 +200,16 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	result := NewTestResult()
 	log.Printf("Testing %d bridge lines.", len(bridgeLines))
 
+	// By default, Tor enters dormant mode 24 hours after seeing no user
+	// activity.  Bridgestrap's control port interaction doesn't count as user
+	// activity, which is why we explicitly wake up Tor before issuing our
+	// SETCONF.  See the following issue for more details:
+	// https://gitlab.torproject.org/tpo/anti-censorship/bridgestrap/-/issues/12
+	if _, err := c.Ctrl.Request("SIGNAL ACTIVE"); err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
 	// Create our SETCONF line, which tells Tor what bridges it should test.
 	// It has the following format:
 	//   SETCONF Bridge="BRIDGE1" Bridge="BRIDGE2" ...
