@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"regexp"
 	"strconv"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -124,6 +126,7 @@ func (t *TorEventState) Feed(line string) {
 	if OrConnEvent.MatchString(line) {
 		t.processOrConnLine(line)
 	} else if NewDescEvent.MatchString(line) {
+		metrics.Events.With(prometheus.Labels{"type": "newdesc", "status": ""}).Inc()
 		t.processNewDescLine(line)
 	} else {
 		log.Printf("%x: Bug: Received an unexpected event %q.", t.TestId, line)
@@ -150,6 +153,7 @@ func (t *TorEventState) processOrConnLine(line string) {
 	// Are we dealing with a new ORCONN for our bridge line?  If so, add its ID
 	// to our map, so we can keep track of it.
 	if eventType == "LAUNCHED" {
+		metrics.Events.With(prometheus.Labels{"type": "orconn", "status": "launched"}).Inc()
 		matchLen := calcMatchLength(target, t.Target)
 		if target == t.Target[:matchLen] {
 			log.Printf("%x: Adding ID %d to map.", t.TestId, i)
@@ -167,6 +171,7 @@ func (t *TorEventState) processOrConnLine(line string) {
 	// https://gitweb.torproject.org/torspec.git/tree/control-spec.txt#n2448
 	switch eventType {
 	case "FAILED":
+		metrics.Events.With(prometheus.Labels{"type": "orconn", "status": "failed"}).Inc()
 		// An ORCONN failed.  Was it ours?
 		if _, exists := t.ConnIds[i]; exists {
 			log.Printf("%x: Setting ORCONN failure.", t.TestId)
@@ -182,6 +187,7 @@ func (t *TorEventState) processOrConnLine(line string) {
 		}
 		t.Reason = desc
 	case "CONNECTED":
+		metrics.Events.With(prometheus.Labels{"type": "orconn", "status": "connected"}).Inc()
 		fingerprint, err := extractFingerprint(line)
 		if err == nil {
 			log.Printf("%x: Setting fingerprint to %s.", t.TestId, fingerprint)

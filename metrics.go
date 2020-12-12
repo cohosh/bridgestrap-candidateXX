@@ -10,11 +10,11 @@ const (
 )
 
 type Metrics struct {
-	OrconnLaunched prometheus.Counter
 	CacheSize      prometheus.Gauge
 	PendingReqs    prometheus.Gauge
 	FracFunctional prometheus.Gauge
 	TorTestTime    prometheus.Histogram
+	Events         *prometheus.CounterVec
 	Cache          *prometheus.CounterVec
 	Requests       *prometheus.CounterVec
 	BridgeStatus   *prometheus.CounterVec
@@ -26,12 +26,6 @@ var metrics *Metrics
 func InitMetrics() {
 
 	metrics = &Metrics{}
-
-	metrics.OrconnLaunched = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: PrometheusNamespace,
-		Name:      "tor_events_orconn_launched",
-		Help:      "The number of ORCONN launch events",
-	})
 
 	metrics.PendingReqs = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: PrometheusNamespace,
@@ -50,6 +44,15 @@ func InitMetrics() {
 		Name:      "cache_size",
 		Help:      "The number of cached elements",
 	})
+
+	metrics.Events = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: PrometheusNamespace,
+			Name:      "tor_events_total",
+			Help:      "The number of Tor events",
+		},
+		[]string{"type", "status"},
+	)
 
 	metrics.Cache = promauto.NewCounterVec(
 		prometheus.CounterOpts{
