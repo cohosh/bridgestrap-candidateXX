@@ -63,7 +63,7 @@ func writeConfigToTorrc(tmpFh io.Writer, dataDir string) error {
 		"SafeLogging 0\n"+
 		"Log notice file %s/tor.log\n"+
 		"DataDirectory %s\n"+
-		"ClientTransportPlugin obfs2,obfs3,obfs4,scramblesuit exec /usr/bin/obfs4proxy\n"+
+		"ClientTransportPlugin obfs2,obfs3,obfs4,scramblesuit exec /usr/bin/obfs4proxy -enableLogging -logLevel DEBUG\n"+
 		"Bridge %s\n"+
 		"Bridge %s\n"+
 		"Bridge %s\n", getDomainSocketPath(dataDir), dataDir, dataDir,
@@ -206,6 +206,7 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	// SETCONF.  See the following issue for more details:
 	// https://gitlab.torproject.org/tpo/anti-censorship/bridgestrap/-/issues/12
 	if _, err := c.Ctrl.Request("SIGNAL ACTIVE"); err != nil {
+		log.Printf("Bug: error after sending SIGNAL ACTIVE: %s", err)
 		result.Error = err.Error()
 		return result
 	}
