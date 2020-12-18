@@ -128,7 +128,7 @@ func main() {
 	flag.StringVar(&torBinary, "tor", "tor", "Path to tor executable.")
 	flag.StringVar(&logFile, "log", "", "File to write logs to.")
 	flag.IntVar(&testTimeout, "test-timeout", 60, "Test timeout in seconds.")
-	flag.IntVar(&cacheTimeout, "cache-timeout", 24, "Cache timeout in hours.")
+	flag.IntVar(&cacheTimeout, "cache-timeout", 18, "Cache timeout in hours.")
 	flag.Parse()
 
 	if showVersion {
