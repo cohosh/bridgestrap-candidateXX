@@ -165,14 +165,12 @@ func main() {
 			})
 	}
 
-	cache = &TestCache{
-		Entries:      make(map[string]*CacheEntry),
-		EntryTimeout: time.Duration(cacheTimeout) * time.Hour,
-	}
-	log.Printf("Setting cache timeout to %s.", cache.EntryTimeout)
+	cache = NewTestCache()
 	if err = cache.ReadFromDisk(cacheFile); err != nil {
 		log.Printf("Could not read cache: %s", err)
 	}
+	cache.entryTimeout = time.Duration(cacheTimeout) * time.Hour
+	log.Printf("Set cache timeout to %s.", cache.entryTimeout)
 	if printCache {
 		printPrettyCache()
 		return

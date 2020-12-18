@@ -30,9 +30,14 @@ type CacheEntry struct {
 type TestCache struct {
 	// Entries maps a bridge's addr:port tuple to a cache entry.
 	Entries map[string]*CacheEntry
-	// EntryTimeout determines how long a cache entry is valid for.
-	EntryTimeout time.Duration
+	// entryTimeout determines how long a cache entry is valid for.
+	entryTimeout time.Duration
 	l            sync.Mutex
+}
+
+// NewTestCache returns a new test cache.
+func NewTestCache() *TestCache {
+	return &TestCache{Entries: make(map[string]*CacheEntry)}
 }
 
 // bridgeLineToAddrPort takes a bridge line as input and returns a string
@@ -109,14 +114,14 @@ func (tc *TestCache) ReadFromDisk(cacheFile string) error {
 }
 
 // IsCached returns a cache entry if the given bridge line has been tested
-// recently (as determined by EntryTimeout), and nil otherwise.
+// recently (as determined by entryTimeout), and nil otherwise.
 func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 
 	// First, prune expired cache entries.
 	now := time.Now().UTC()
 	tc.l.Lock()
 	for index, entry := range (*tc).Entries {
-		if entry.Time.Before(now.Add(-(*tc).EntryTimeout)) {
+		if entry.Time.Before(now.Add(-(*tc).entryTimeout)) {
 			delete((*tc).Entries, index)
 		}
 	}

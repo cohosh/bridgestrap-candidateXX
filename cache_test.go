@@ -18,7 +18,7 @@ func init() {
 func NewCache() *TestCache {
 	return &TestCache{
 		Entries:      make(map[string]*CacheEntry),
-		EntryTimeout: 24 * time.Hour,
+		entryTimeout: 18 * time.Hour,
 	}
 }
 
