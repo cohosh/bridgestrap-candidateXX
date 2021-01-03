@@ -56,6 +56,9 @@ func bridgeLineToAddrPort(bridgeLine string) (string, error) {
 // are functional.
 func (tc *TestCache) FracFunctional() float64 {
 
+	tc.l.Lock()
+	defer tc.l.Unlock()
+
 	if len((*tc).Entries) == 0 {
 		return 0
 	}
