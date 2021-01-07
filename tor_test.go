@@ -61,7 +61,16 @@ func TestBridgeTest(t *testing.T) {
 		t.Fatalf("Failed to start tor: %s", err)
 	}
 
-	result := torCtx.TestBridgeLines([]string{defaultBridge1, defaultBridge2, bogusBridge})
+	resultChan := make(chan *TestResult)
+	req := &TestRequest{
+		BridgeLines: []string{defaultBridge1, defaultBridge2, bogusBridge},
+		resultChan:  resultChan,
+	}
+	// Submit the test request.
+	torCtx.RequestQueue <- req
+	// Now wait for the test result.
+	result := <-resultChan
+
 	r, _ := result.Bridges[defaultBridge1]
 	if !r.Functional {
 		t.Errorf("Default bridge #1 deemed non-functional.")
