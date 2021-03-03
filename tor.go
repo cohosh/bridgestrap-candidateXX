@@ -24,7 +24,9 @@ const (
 	DefaultBridge2 = "obfs4 193.11.166.194:27015 2D82C2E354D531A68469ADF7F878FA6060C6BACA cert=4TLQPJrTSaDffMK7Nbao6LC7G9OW/NHkUwIdjLSS3KYf0Nv4/nQiiI8dY2TcsQx01NniOg iat-mode=0"
 	DefaultBridge3 = "obfs4 37.218.245.14:38224 D9A82D2F9C2F65A18407B1D2B764F130847F8B5D cert=bjRaMrr1BRiAW8IE9U5z27fQaYgOhX1UCmOpg2pFpoMvo6ZgQMzLsaTzzQNTlm7hNcb+Sg iat-mode=0"
 	// The maximum amount of bridges per batch.
-	MaxBridgesPerReq = 100
+	MaxBridgesPerReq  = 100
+	MaxEventBacklog   = 100
+	MaxRequestBacklog = 100
 )
 
 // The amount of time we give Tor to test a batch of bridges.
@@ -141,8 +143,8 @@ func (c *TorContext) Start() error {
 	defer c.Unlock()
 	log.Println("Starting Tor process.")
 
-	c.eventChan = make(chan *bulb.Response, 100)
-	c.RequestQueue = make(chan *TestRequest, 100)
+	c.eventChan = make(chan *bulb.Response, MaxEventBacklog)
+	c.RequestQueue = make(chan *TestRequest, MaxRequestBacklog)
 	c.shutdown = make(chan bool)
 
 	// Create Tor's data directory.
@@ -200,6 +202,17 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	result := NewTestResult()
 	log.Printf("Testing %d bridge lines.", len(bridgeLines))
 
+	// We maintain per-bridge state machines that parse Tor's event output.
+	eventParsers := make(map[string]*TorEventState)
+	for _, bridgeLine := range bridgeLines {
+		identifier, err := getBridgeIdentifier(bridgeLine)
+		if err != nil {
+			log.Printf("Bug: Could not extract identifier from bridge line %q.", bridgeLine)
+			continue
+		}
+		eventParsers[bridgeLine] = NewTorEventState(identifier)
+	}
+
 	// By default, Tor enters dormant mode 24 hours after seeing no user
 	// activity.  Bridgestrap's control port interaction doesn't count as user
 	// activity, which is why we explicitly wake up Tor before issuing our
@@ -223,17 +236,6 @@ func (c *TorContext) TestBridgeLines(bridgeLines []string) *TestResult {
 	if _, err := c.Ctrl.Request(cmd); err != nil {
 		result.Error = err.Error()
 		return result
-	}
-
-	// We maintain per-bridge state machines that parse Tor's event output.
-	eventParsers := make(map[string]*TorEventState)
-	for _, bridgeLine := range bridgeLines {
-		identifier, err := getBridgeIdentifier(bridgeLine)
-		if err != nil {
-			log.Printf("Bug: Could not extract identifier from bridge line %q.", bridgeLine)
-			continue
-		}
-		eventParsers[bridgeLine] = NewTorEventState(identifier)
 	}
 
 	log.Printf("Waiting for Tor to give us test results.")
@@ -311,6 +313,9 @@ func (c *TorContext) dispatcher() {
 			metrics.TorTestTime.Observe(elapsed.Seconds())
 
 			req.resultChan <- result
+		case <-c.eventChan:
+			// Discard events that happen while we are not testing bridges.
+			log.Printf("Discarding event because we're not testing bridges.")
 		case <-c.shutdown:
 			return
 		}
@@ -329,6 +334,7 @@ func (c *TorContext) eventReader() {
 			close(c.eventChan)
 			return
 		}
+		metrics.PendingEvents.Set(float64(len(c.eventChan)))
 		c.eventChan <- ev
 	}
 }

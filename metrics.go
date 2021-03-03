@@ -12,6 +12,7 @@ const (
 type Metrics struct {
 	CacheSize      prometheus.Gauge
 	PendingReqs    prometheus.Gauge
+	PendingEvents  prometheus.Gauge
 	FracFunctional prometheus.Gauge
 	TorTestTime    prometheus.Histogram
 	Events         *prometheus.CounterVec
@@ -31,6 +32,12 @@ func InitMetrics() {
 		Namespace: PrometheusNamespace,
 		Name:      "pending_requests",
 		Help:      "The number of pending requests",
+	})
+
+	metrics.PendingEvents = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: PrometheusNamespace,
+		Name:      "pending_events",
+		Help:      "The number of pending Tor controller events",
 	})
 
 	metrics.FracFunctional = promauto.NewGauge(prometheus.GaugeOpts{
