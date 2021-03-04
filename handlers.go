@@ -21,9 +21,9 @@ var FailurePage string
 // BridgeTest represents the result of a bridge test, sent back to the client
 // as JSON object.
 type BridgeTest struct {
-	Functional bool      `json:"functional"`
-	LastTested time.Time `json:"last_tested"`
-	Error      string    `json:"error,omitempty"`
+	Functional bool   `json:"functional"`
+	LastTested string `json:"last_tested"`
+	Error      string `json:"error,omitempty"`
 }
 
 // TestResult represents the result of a test.
@@ -103,7 +103,7 @@ func testBridgeLines(req *TestRequest) *TestResult {
 			metrics.Cache.With(prometheus.Labels{"type": "hit"}).Inc()
 			result.Bridges[bridgeLine] = &BridgeTest{
 				Functional: entry.Error == "",
-				LastTested: entry.Time,
+				LastTested: fmt.Sprintf("\"%s\"", entry.Time.Format("2006-01-02 15:04:05 -0700 MST")),
 				Error:      entry.Error,
 			}
 		} else {
@@ -126,7 +126,8 @@ func testBridgeLines(req *TestRequest) *TestResult {
 
 		// Cache partial test results and add them to our existing result object.
 		for bridgeLine, bridgeTest := range partialResult.Bridges {
-			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error), bridgeTest.LastTested)
+			lastTested, _ := time.Parse("2006-01-02 15:04:05 -0700 MST", bridgeTest.LastTested)
+			cache.AddEntry(bridgeLine, errors.New(bridgeTest.Error), lastTested)
 			if bridgeTest.Functional {
 				metrics.BridgeStatus.With(prometheus.Labels{"status": "functional"}).Inc()
 			} else {
