@@ -47,6 +47,14 @@ var routes = Routes{
 		"/result",
 		BridgeStateWeb,
 	},
+	// NOTE: we may eventually want to make this conditional, as we do
+	// for the web interface.
+	Route{
+		"BridgeMetrics",
+		"GET",
+		"/metrics/v1",
+		BridgeMetrics,
+	},
 }
 
 // tmpDataDir contains the path to Tor's data directory.

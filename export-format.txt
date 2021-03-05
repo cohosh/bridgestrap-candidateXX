@@ -1,0 +1,34 @@
+
+The current (v1) metrics format is available by default at /metrics/v1.
+It includes only bridge lines for now, but may someday also include more.
+
+It's a line-oriented format as used elsewhere in the Tor ecosystem.  Elements
+of each line are separated with whitespace.  The first element of the line
+denotes what kind of line it is; remaining elements are in a KEY=VAL format.
+The VAL may be quoted; if so it may contain spaces and should be interpreted
+as if it were a Go string.
+
+Implementations reading this format SHOULD ignore any lines whose first (tag)
+element they don't recognize, and SHOULD ignore any KEY within a line that
+they do not recognize.
+
+The KEYs on a line may appear in any order.  The same key can appear more
+than once.
+
+Currently exposed lines are:
+
+     "bridge"
+          "at="YYYY-MM-DDTHH:MM:SS
+          "cache-hits="N
+          "err="QuotedError
+          "id="Identifier
+
+       Describes a cached bridge test result.  The Identifier is a
+       hex-encoded SHA256 hash of the bridge's fingerprint, or a set of "0"
+       characters (if no fingerprint was given).  The "at" time is the time
+       when the test was completed, in UTC.  The QuotedError is a quoted
+       string representing the outcome of the test.  The "cache-hits" value
+       is the number of times the bridge's result has been requested from the
+       cache.
+
+
