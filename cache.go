@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -20,12 +21,19 @@ var AddrPortBridgeLine = regexp.MustCompile(`[0-9a-z\[\]\.:]+:[0-9]{1,5}`)
 // tested.  Error is nil if a bridge works, and otherwise holds an error
 // string.  Time determines when we tested the bridge.
 type CacheEntry struct {
+        // Safe SHA256 identifier for this bridge, or 0.
+     	HashedIdent [32]byte
 	// We're using a string instead of an error here because golang's gob
 	// package doesn't know how to deal with an error:
 	// <https://github.com/golang/go/issues/23340>
 	Error string
 	Time  time.Time
+	// How many times have we successfully looked up this value from the cache?
+	CacheHits int
 }
+// NOTE: I'm adding new fields above.  I hope that gob can handle
+// setting them to a reasonable default when loading from disk?  If not
+// we need a migration feature.
 
 type TestCache struct {
 	// Entries maps a bridge's addr:port tuple to a cache entry.
@@ -116,6 +124,30 @@ func (tc *TestCache) ReadFromDisk(cacheFile string) error {
 	return err
 }
 
+// return the metrics for each cached bridge as a v1 bridge metrics line
+//
+// This data must not contain anything sensitive.
+func (tc *TestCache) AsV1Metrics() []string {
+
+     tc.l.Lock()
+     var result = make([]string, 0, len((*tc).Entries))
+     for _, entry := range (*tc).Entries {
+         // Optionally, we could skip expired entries, but I don't see the point.
+
+         digest_of_digest := hex.EncodeToString(entry.HashedIdent[:])
+	 when := entry.Time.UTC().Format("2006-01-02T15:04:05")
+	 line := fmt.Sprintf("bridge id=%s err=%q at=%s cache-hits=%s\n",
+	                     digest_of_digest,
+			     entry.Error, // can this be private?
+			     when,
+			     entry.CacheHits)
+     	 result = append(result, line)
+     }
+     tc.l.Unlock()
+
+     return result
+}
+
 // IsCached returns a cache entry if the given bridge line has been tested
 // recently (as determined by entryTimeout), and nil otherwise.
 func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
@@ -137,6 +169,9 @@ func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 
 	tc.l.Lock()
 	var r *CacheEntry = (*tc).Entries[addrPort]
+	if r != nil {
+	   r.CacheHits += 1
+	}
 	tc.l.Unlock()
 
 	return r
@@ -146,9 +181,13 @@ func (tc *TestCache) IsCached(bridgeLine string) *CacheEntry {
 // our cache.
 func (tc *TestCache) AddEntry(bridgeLine string, result error, lastTested time.Time) {
 
-	addrPort, err := bridgeLineToAddrPort(bridgeLine)
+     	addrPort, err := bridgeLineToAddrPort(bridgeLine)
 	if err != nil {
 		return
+	}
+	identifier, err := getHashedBridgeIdentifier(bridgeLine)
+	if err != nil {
+	        return
 	}
 
 	var errorStr string
@@ -158,7 +197,7 @@ func (tc *TestCache) AddEntry(bridgeLine string, result error, lastTested time.T
 		errorStr = result.Error()
 	}
 	tc.l.Lock()
-	(*tc).Entries[addrPort] = &CacheEntry{errorStr, lastTested}
+	(*tc).Entries[addrPort] = &CacheEntry{identifier, errorStr, lastTested, 0}
 	tc.l.Unlock()
 
 	metrics.FracFunctional.Set((*tc).FracFunctional())

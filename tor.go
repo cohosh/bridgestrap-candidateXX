@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -48,6 +49,30 @@ func getBridgeIdentifier(bridgeLine string) (string, error) {
 	}
 
 	return "", errors.New("could not extract bridge identifier")
+}
+
+// Turn a bridge line into a safe identifier that we can expose to the
+// world.
+//
+// Can fail if the bridge line doesn't have a digest on it. Returns nil if so
+func getHashedBridgeIdentifier(bridgeLine string) ([32]byte, error) {
+     id, err := getBridgeIdentifier(bridgeLine)
+     if err == nil {
+         if strings.HasPrefix(id, "$") {
+             return sha256.Sum256([]byte(id)), nil
+         } else {
+	     // TODO: We could identify bridges with unknown IDs only
+	     // by their addr:port here, but that wouldn't be "safe".
+	     //
+             // Perhaps we could make it safe by prefixing them with a secret value
+             // before hashing, but that needs analysis.  And I don't know how to make
+             // that value persistent; that seems like a PITA.
+
+             return [32]byte{}, nil
+	 }
+     } else {
+       return [32]byte{}, err
+     }
 }
 
 // getDomainSocketPath takes as input the path to our data directory and

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -240,4 +241,16 @@ func BridgeStateWeb(w http.ResponseWriter, r *http.Request) {
 	} else {
 		SendHtmlResponse(w, FailurePage)
 	}
+}
+
+// Handler function, called on GET /metrics/v1
+func BridgeMetrics(w http.ResponseWriter, r *http.Request) {
+
+     // NOTE: I'm making this format for consistency with the
+     // consistency with snowflake stats.  But really, mightn't we be
+     // happer doing this with json or something?
+
+     reply := cache.AsV1Metrics()
+
+     SendHtmlResponse(w, strings.Join(reply, ""))
 }
